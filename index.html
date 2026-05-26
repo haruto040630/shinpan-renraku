@@ -204,6 +204,22 @@ body { font-family: -apple-system,'Hiragino Sans','Yu Gothic UI','Meiryo',sans-s
 .modal-title { font-size: 16px; font-weight: 800; color: var(--navy); margin-bottom: 18px; }
 .modal-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 6px; }
 
+
+/* ── 試合カード メタ ── */
+.game-meta { padding: 8px 14px; background: #fafbff; border-bottom: 1px solid #edf0f8; }
+.meta-row  { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+.meta-row label { font-size: 11px; color: var(--muted); font-weight: 700; min-width: 90px; flex-shrink: 0; }
+.meta-sel  { flex: 1; padding: 7px 8px; border: 1px solid var(--border); border-radius: 7px; font-size: 12px; background: var(--white); font-family: inherit; color: var(--text); min-width: 0; }
+.meta-sel:focus { outline: none; border-color: var(--navy3); }
+
+/* ── スピナー (ノンブロッキング) ── */
+.spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: middle; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.sync-pill { display: none; align-items: center; gap: 6px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2); padding: 4px 10px; border-radius: 20px; font-size: 11px; color: rgba(255,255,255,.9); }
+.sync-pill.show { display: inline-flex; }
+.fb-navy:disabled { opacity: .7; cursor: wait; }
+.fb-navy .spinner { border-color: rgba(255,255,255,.3); border-top-color: #fff; margin-right: 4px; }
+
 /* Toast */
 .toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(16px); background: var(--navy); color: var(--white); padding: 10px 22px; border-radius: 30px; font-size: 13px; font-weight: 600; opacity: 0; transition: opacity .22s, transform .22s; pointer-events: none; z-index: 9999; white-space: nowrap; max-width: 88vw; text-align: center; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -220,39 +236,13 @@ body { font-family: -apple-system,'Hiragino Sans','Yu Gothic UI','Meiryo',sans-s
     <div class="login-title">審判確認連絡</div>
     <div class="login-sub">JUFA Tokai Referee</div>
 
-    <div class="auth-tabs">
-      <div class="auth-tab active" id="tab-login" onclick="switchTab('login')">ログイン</div>
-      <div class="auth-tab" id="tab-reg" onclick="switchTab('reg')">新規登録</div>
-    </div>
-
-    <div id="form-login" class="auth-form active">
-      <div class="fg">
-        <label class="fl">ユーザーID</label>
-        <input class="fi" type="text" id="login-id" placeholder="ユーザーID" autocomplete="username">
-      </div>
+    <div id="form-login" class="auth-form active" style="margin-top:24px">
       <div class="fg">
         <label class="fl">パスワード</label>
         <input class="fi" type="password" id="login-pw" placeholder="パスワード" autocomplete="current-password">
       </div>
       <div class="form-err" id="login-err"></div>
-      <button class="fb fb-navy" onclick="doLogin()">ログイン</button>
-    </div>
-
-    <div id="form-reg" class="auth-form">
-      <div class="fg">
-        <label class="fl">ユーザーID（半角英数字）</label>
-        <input class="fi" type="text" id="reg-id" placeholder="新規ユーザーID" autocomplete="username">
-      </div>
-      <div class="fg">
-        <label class="fl">パスワード</label>
-        <input class="fi" type="password" id="reg-pw" placeholder="パスワード（4文字以上）" autocomplete="new-password">
-      </div>
-      <div class="fg">
-        <label class="fl">パスワード（確認）</label>
-        <input class="fi" type="password" id="reg-pw2" placeholder="もう一度入力" autocomplete="new-password">
-      </div>
-      <div class="form-err" id="reg-err"></div>
-      <button class="fb fb-red" onclick="doRegister()">新規登録</button>
+      <button class="fb fb-navy" onclick="doLogin()" id="login-btn">ログイン</button>
     </div>
   </div>
 </div>
@@ -264,6 +254,7 @@ body { font-family: -apple-system,'Hiragino Sans','Yu Gothic UI','Meiryo',sans-s
   <div class="app-bar">
     <div class="app-bar-row">
       <div class="app-bar-title">⚽ 審判確認連絡</div>
+      <div class="sync-pill" id="syncPill"><span class="spinner"></span>同期中</div>
       <button class="bar-btn" onclick="doLogout()">ログアウト</button>
     </div>
     <div class="app-bar-sub" id="dash-sub"></div>
@@ -332,6 +323,7 @@ body { font-family: -apple-system,'Hiragino Sans','Yu Gothic UI','Meiryo',sans-s
   <div class="app-bar">
     <div class="app-bar-row">
       <button class="bar-btn back-btn" onclick="goToDash()">&#8592; 一覧</button>
+      <div class="sync-pill" id="syncPillSess" style="margin-left:auto;margin-right:8px"><span class="spinner"></span>同期</div>
       <div class="app-bar-title" id="sess-title" style="font-size:13px;text-align:right"></div>
     </div>
     <div class="app-bar-sub" id="sess-sub"></div>
@@ -436,6 +428,10 @@ const VENUE_MAP = {
   '桑名市NTN総合運動公園フットボール場':    '三重県桑名市芳ケ崎１８５９‐４',
 };
 
+const MANAGERS = [{"name": "山田晴翔", "tel": "090-5108-4633"}, {"name": "政岡将樹", "tel": "080-6945-0941"}, {"name": "横田優希", "tel": "080-6509-1180"}, {"name": "松尾侑一", "tel": "080-3962-1337"}, {"name": "齊田勇人", "tel": "090-1092-1780"}, {"name": "野本朋希", "tel": "090-2729-7988"}, {"name": "梅原凌", "tel": "080-9739-3450"}, {"name": "林唯人", "tel": "070-4165-1644"}, {"name": "中村茉歩", "tel": "090-4405-5866"}, {"name": "小林隼大", "tel": "080-6509-1180"}, {"name": "細山周佑", "tel": "070-4422-5822"}, {"name": "金澤史奈", "tel": "090-4113-2375"}, {"name": "竹本咲", "tel": "090-9796-0352"}, {"name": "奥野遥斗", "tel": "080-3670-8686"}, {"name": "山本陽菜乃", "tel": "070-3861-1448"}, {"name": "小林隼大", "tel": "070-4212-9046"}, {"name": "小川航輝", "tel": "090-5053-2047"}, {"name": "佐原凪咲", "tel": "080-4210-1845"}, {"name": "鈴木瑛士", "tel": "080-5158-4400"}, {"name": "梅村姫果", "tel": "080-6916-8422"}, {"name": "八嶋栞", "tel": "080-9117-0329"}, {"name": "森田湊和", "tel": "090-6646-9693"}, {"name": "塩崎拓真", "tel": "090-7694-1815"}, {"name": "藤田祥真", "tel": "080-7435-9086"}, {"name": "中根徠雄", "tel": "080-2636-0815"}, {"name": "加藤陽斗", "tel": "080-3645-2929"}, {"name": "牟田翔一", "tel": "090-2979-1784"}, {"name": "安達琉空", "tel": "090-5239-4943"}, {"name": "應原颯太郎", "tel": "090-3441-3023"}, {"name": "大石隼之介", "tel": "090-3150-4617"}];
+const SENDERS = ["山田", "冨永", "鈴木", "籔中", "小澤"];
+
+
 /* ════════════════════════════════════  IDB  ════════════════════════════════════ */
 const DB_NAME = 'shinpanV6', DB_VER = 1;
 function dbOpen() {
@@ -463,10 +459,20 @@ async function dbSet(k, v) {
 }
 
 /* ════════════════════════════════════  STATE  ════════════════════════════════════ */
-let userId = null, sessionId = null;
+let authed = false, sessionId = null;
 let games = [], states = {}, prefs = [], pref = 'all';
 let nsBuf = null, nsName = '';
 let editSid = null, emBuf = null, emName = '';
+// ── 共有DB関連 ──
+let sessionsCache = [];
+let remoteSha = null;
+let remoteEncryptedToken = null;
+let syncTimer = null, pushDebounce = null;
+let pushing = false, pushQueued = false;
+let lastUpdatedAt = 0;
+let selections = { managers: {}, senders: {} };
+let GH_TOKEN_RUNTIME = null;
+window._allStates = {};
 
 /* ════════════════════════════════════  DROPDOWN HELPERS  ════════════════════════════════════ */
 function buildYearOpts(selId, cur) {
@@ -499,8 +505,6 @@ function initFormSelects(prefix, meta) {
 /* ════════════════════════════════════  BOOT  ════════════════════════════════════ */
 window.addEventListener('load', async () => {
   document.getElementById('login-pw').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
-  document.getElementById('reg-pw2').addEventListener('keydown', e => { if(e.key==='Enter') doRegister(); });
-  await dbSet('loggedIn', null); // 毎回ログアウト
 });
 
 /* ════════════════════════════════════  PAGE NAV  ════════════════════════════════════ */
@@ -524,54 +528,77 @@ async function hashPw(pw) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw));
   return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
 }
-async function doLogin() {
-  const id = document.getElementById('login-id').value.trim();
-  const pw = document.getElementById('login-pw').value;
-  const err = document.getElementById('login-err');
-  if(!id||!pw){ err.textContent='IDとパスワードを入力してください'; return; }
-  const users = await dbGet('users') || {};
-  if(!users[id]){ err.textContent='ユーザーが存在しません'; return; }
-  if(users[id].hash !== await hashPw(pw)){ err.textContent='パスワードが違います'; return; }
-  userId = id;
-  await dbSet('loggedIn', id);
-  showDash();
+const SHARED_PW_HASH = "644b7b0a2cb5d741569495388bddbc3819480a681a114ae3eb34f13a0cd5604c";
+const CRYPTO_SALT = new TextEncoder().encode("shinpan-salt-v1!");
+
+async function deriveKey(password) {
+  const baseKey = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name:'PBKDF2', salt: CRYPTO_SALT, iterations: 100000, hash: 'SHA-256' },
+    baseKey,
+    { name:'AES-GCM', length: 256 },
+    false, ['decrypt']
+  );
 }
-async function doRegister() {
-  const id  = document.getElementById('reg-id').value.trim();
-  const pw  = document.getElementById('reg-pw').value;
-  const pw2 = document.getElementById('reg-pw2').value;
-  const err = document.getElementById('reg-err');
-  if(!id||!pw){ err.textContent='IDとパスワードを入力してください'; return; }
-  if(id.length<3){ err.textContent='IDは3文字以上にしてください'; return; }
-  if(pw.length<4){ err.textContent='パスワードは4文字以上にしてください'; return; }
-  if(pw!==pw2){ err.textContent='パスワードが一致しません'; return; }
-  const users = await dbGet('users') || {};
-  if(users[id]){ err.textContent='このIDは既に使用されています'; return; }
-  users[id] = { hash: await hashPw(pw), created: Date.now() };
-  await dbSet('users', users);
-  userId = id;
-  await dbSet('loggedIn', id);
-  showDash();
+async function decryptToken(b64, password) {
+  const data = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const iv = data.slice(0, 12);
+  const ct = data.slice(12);
+  const key = await deriveKey(password);
+  const pt = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, key, ct);
+  return new TextDecoder().decode(pt);
+}
+
+async function doLogin() {
+  const pw  = document.getElementById('login-pw').value;
+  const err = document.getElementById('login-err');
+  const btn = document.getElementById('login-btn');
+  if(!pw){ err.textContent='パスワードを入力してください'; return; }
+  const h = await hashPw(pw);
+  if(h !== SHARED_PW_HASH){ err.textContent='パスワードが違います'; return; }
+  err.textContent = '';
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> 接続中...';
+  try {
+    // 公開 data.json を取得 (匿名読込)
+    const initData = await pullDataAnon();
+    if(initData && initData.encryptedToken) {
+      GH_TOKEN_RUNTIME = await decryptToken(initData.encryptedToken, pw);
+      await applyRemoteData(initData);
+    }
+    authed = true;
+    showDash();
+    startSync();
+  } catch(e) {
+    console.error(e);
+    err.textContent = '接続に失敗しました（パスワード再確認）';
+    btn.disabled = false;
+    btn.innerHTML = 'ログイン';
+    return;
+  }
+  btn.disabled = false;
+  btn.innerHTML = 'ログイン';
 }
 async function doLogout() {
-  userId = null; sessionId = null;
-  await dbSet('loggedIn', null);
-  document.getElementById('login-id').value = '';
+  authed = false;
+  GH_TOKEN_RUNTIME = null;
+  stopSync();
+  sessionsCache = []; window._allStates = {}; selections = { managers:{}, senders:{} };
   document.getElementById('login-pw').value = '';
   document.getElementById('login-err').textContent = '';
-  switchTab('login');
   showPage('pg-login');
 }
+function switchTab(){} // 互換用
 
 /* ════════════════════════════════════  DASHBOARD  ════════════════════════════════════ */
 async function showDash() {
-  document.getElementById('dash-sub').textContent = `ログイン中：${userId}`;
+  document.getElementById('dash-sub').textContent = '';
   await renderSessions();
   showPage('pg-dash');
 }
 async function renderSessions() {
   const list = document.getElementById('session-list');
-  const sessions = await dbGet(`idx_${userId}`) || [];
+  const sessions = sessionsCache.length ? sessionsCache : (await dbGet('idx_shared') || []);
   if(!sessions.length){ list.innerHTML='<div class="empty-msg">過去のセッションはありません</div>'; return; }
   list.innerHTML = '';
   sessions.forEach(s => {
@@ -621,23 +648,31 @@ async function createSession() {
   const day2  = document.getElementById('ns-day2').value;
   const note  = document.getElementById('ns-note').value.trim();
   const err   = document.getElementById('ns-err');
-  if (!year)  { err.textContent = '年を選択してください'; return; }
-  if (!month) { err.textContent = '月を選択してください'; return; }
-  if (!day1)  { err.textContent = '第1日を選択してください'; return; }
-  if (!nsBuf) { err.textContent = 'Excelファイルを選択してください'; return; }
+  if (!year)  { err.textContent='年を選択してください'; return; }
+  if (!month) { err.textContent='月を選択してください'; return; }
+  if (!day1)  { err.textContent='第1日を選択してください'; return; }
+  if (!nsBuf) { err.textContent='Excelファイルを選択してください'; return; }
   err.textContent = '';
-  const sid = `${userId}_${Date.now()}`;
-  const meta = { id: sid, tournament: tour, year: +year, month: +month, day1: +day1, day2: day2 ? +day2 : null, note, fileName: nsName, created: Date.now() };
-  await dbSet(`buf_${sid}`, nsBuf);
-  await dbSet(`st_${sid}`, {});
-  const list = await dbGet(`idx_${userId}`) || [];
-  list.unshift(meta);
-  await dbSet(`idx_${userId}`, list);
+  showSyncPill(true);
+  // Excelをパース → games配列に
+  const wb = XLSX.read(nsBuf, { type:'array', cellDates:true });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:null });
+  const tmp = games;
+  buildGames(rows);
+  const parsedGames = games;
+  games = tmp;
+  const sid = `shared_${Date.now()}`;
+  const meta = { id: sid, tournament: tour, year: +year, month: +month, day1: +day1, day2: day2 ? +day2 : null, note, fileName: nsName, created: Date.now(), games: parsedGames };
+  sessionsCache.unshift(meta);
+  await dbSet('idx_shared', sessionsCache);
   nsBuf = null; nsName = '';
   document.getElementById('ns-note').value = '';
   document.getElementById('ns-file').value = '';
   document.getElementById('ns-file-name').textContent = '';
   document.getElementById('new-form').classList.remove('open');
+  schedulePush();
+  showSyncPill(false);
   openSession(sid, meta);
 }
 function fmtSessionDate(s) {
@@ -646,14 +681,18 @@ function fmtSessionDate(s) {
   return yr + (s.day2 ? `${s.month}月${s.day1}日・${s.day2}日` : `${s.month}月${s.day1}日`);
 }
 async function openSession(sid, meta) {
-  const buf = await dbGet(`buf_${sid}`);
-  const st  = await dbGet(`st_${sid}`) || {};
-  if (!buf) { alert('ファイルが見つかりません'); return; }
   sessionId = sid;
-  states = st;
+  states = window._allStates || {};
   document.getElementById('sess-title').textContent = meta.tournament;
   document.getElementById('sess-sub').textContent = fmtSessionDate(meta);
-  parseWorkbook(buf);
+  let gs = meta.games;
+  if(!gs) gs = await dbGet(`games_${sid}`);
+  if(!gs) { alert('試合データが見つかりません'); return; }
+  games = gs;
+  prefs = ['愛知','岐阜','三重','静岡'].filter(p=>games.some(g=>g.pref===p));
+  pref = 'all';
+  renderTabs();
+  renderCards();
   showPage('pg-session');
 }
 
@@ -692,32 +731,41 @@ async function saveEdit() {
   const day2  = document.getElementById('em-day2').value;
   const note  = document.getElementById('em-note').value.trim();
   const err   = document.getElementById('em-err');
-  if (!year)  { err.textContent = '年を選択してください'; return; }
-  if (!month) { err.textContent = '月を選択してください'; return; }
-  if (!day1)  { err.textContent = '第1日を選択してください'; return; }
+  if (!year)  { err.textContent='年を選択してください'; return; }
+  if (!month) { err.textContent='月を選択してください'; return; }
+  if (!day1)  { err.textContent='第1日を選択してください'; return; }
   err.textContent = '';
-  let list = await dbGet(`idx_${userId}`) || [];
-  const idx = list.findIndex(s => s.id === editSid);
+  const idx = sessionsCache.findIndex(s => s.id === editSid);
   if (idx < 0) return;
-  list[idx] = { ...list[idx], year: +year, month: +month, day1: +day1, day2: day2 ? +day2 : null, note };
+  sessionsCache[idx] = { ...sessionsCache[idx], year:+year, month:+month, day1:+day1, day2: day2 ? +day2 : null, note };
   if (emBuf) {
-    await dbSet(`buf_${editSid}`, emBuf);
-    list[idx].fileName = emName;
+    showSyncPill(true);
+    const wb = XLSX.read(emBuf, { type:'array', cellDates:true });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:null });
+    const tmp = games;
+    buildGames(rows);
+    sessionsCache[idx].games = games;
+    sessionsCache[idx].fileName = emName;
+    games = tmp;
+    showSyncPill(false);
   }
-  await dbSet(`idx_${userId}`, list);
+  await dbSet('idx_shared', sessionsCache);
   document.getElementById('edit-modal').classList.remove('open');
   editSid = null; emBuf = null; emName = '';
   toast('セッションを更新しました ✓');
   renderSessions();
+  schedulePush();
 }
 async function delSession(sid) {
   if(!confirm('このセッションを削除しますか？')) return;
-  let list = await dbGet(`idx_${userId}`) || [];
-  list = list.filter(s => s.id !== sid);
-  await dbSet(`idx_${userId}`, list);
-  await dbSet(`buf_${sid}`, null);
-  await dbSet(`st_${sid}`, null);
+  sessionsCache = sessionsCache.filter(s => s.id !== sid);
+  await dbSet('idx_shared', sessionsCache);
+  if(selections.managers) for(const k of Object.keys(selections.managers)) if(k.startsWith(sid)) delete selections.managers[k];
+  if(selections.senders)  for(const k of Object.keys(selections.senders))  if(k.startsWith(sid)) delete selections.senders[k];
+  if(window._allStates) for(const k of Object.keys(window._allStates)) if(k.startsWith(sid)) delete window._allStates[k];
   renderSessions();
+  schedulePush();
 }
 async function goToDash() {
   sessionId = null; games = []; states = {}; pref = 'all';
@@ -860,6 +908,8 @@ function makeCard(g) {
   const card = document.createElement('div');
   card.className = 'game-card';
   card.id = 'gc-'+g.id;
+  const mgrIdx = (selections.managers || {})[`${sessionId}__${g.id}`];
+  const sender = (selections.senders  || {})[`${sessionId}__${g.id}`] || '';
   card.innerHTML = `
     <div class="game-head">
       <div class="game-label">${g.league}　${g.match}</div>
@@ -871,7 +921,26 @@ function makeCard(g) {
       <div class="game-venue">📍 ${g.venue}</div>
       <div class="game-addr${g.addrOk?'':' warn'}">🗺 ${g.addrOk?g.addr:'⚠ 住所未定'}</div>
     </div>
+    <div class="game-meta">
+      <div class="meta-row">
+        <label>👤 会場責任者</label>
+        <select class="meta-sel" data-gid="${g.id}" data-key="manager">
+          <option value="">未定</option>
+          ${MANAGERS.map((m,i)=>`<option value="${i}"${i==mgrIdx?' selected':''}>${m.name} / ${m.tel}</option>`).join('')}
+        </select>
+      </div>
+      <div class="meta-row">
+        <label>📤 送信元</label>
+        <select class="meta-sel" data-gid="${g.id}" data-key="sender">
+          <option value="">未設定</option>
+          ${SENDERS.map(s=>`<option value="${s}"${s===sender?' selected':''}>${s}</option>`).join('')}
+        </select>
+      </div>
+    </div>
   `;
+  card.querySelectorAll('.meta-sel').forEach(sel => {
+    sel.onchange = e => onMetaChange(e.currentTarget.dataset.gid, e.currentTarget.dataset.key, e.currentTarget.value);
+  });
   g.refs.forEach(ref => card.appendChild(makeRefRow(g, ref)));
   const footer = document.createElement('div');
   footer.className = 'game-footer';
@@ -880,11 +949,24 @@ function makeCard(g) {
   card.appendChild(footer);
   return card;
 }
+function onMetaChange(gid, key, val) {
+  const k = `${sessionId}__${gid}`;
+  if(key === 'manager') {
+    selections.managers = selections.managers || {};
+    if(val === '') delete selections.managers[k];
+    else selections.managers[k] = +val;
+  } else if(key === 'sender') {
+    selections.senders = selections.senders || {};
+    if(val === '') delete selections.senders[k];
+    else selections.senders[k] = val;
+  }
+  schedulePush();
+}
 function makeRefRow(g, ref) {
   const row = document.createElement('div');
   row.className = 'ref-row';
   row.id = `rr-${g.id}-${ref.role}`;
-  const st  = states[`${g.id}_${ref.role}`] || {};
+  const st  = states[`${sessionId}__${g.id}__${ref.role}`] || {};
   const cls = ref.role==='主審' ? 'chip-主審' : ref.role==='AR1' ? 'chip-AR1' : 'chip-AR2';
   const tel = ref.tel ? `<a href="tel:${ref.tel}">${ref.tel}</a>` : '<span style="color:#bbb">未登録</span>';
   row.innerHTML = `
@@ -917,9 +999,14 @@ function buildOut1(g, ref) {
   const greeting  = 'お世話になっております。\n\n今週末の東海リーグの割り当ての確認の連絡になります。';
   const gameBlock = [`${month}/${day}（${dow}）`, g.venue, `住所：${g.addr}`, `${g.time}ko`, `${g.teamA} 対 ${g.teamB}`].join('\n');
   const refBlock  = g.refs.map(r=>`${r.role}：${r.name} 様`).join('\n') + (g.assessor ? `\nアセッサー：${g.assessor.name} 様` : '');
-  const mgr       = '会場責任者 未定\n電話番号：未定';
+  const mgrKey    = `${sessionId}__${g.id}`;
+  const mgrIdx    = (selections.managers || {})[mgrKey];
+  const mgrObj    = (mgrIdx != null && MANAGERS[mgrIdx]) ? MANAGERS[mgrIdx] : null;
+  const mgr       = mgrObj ? `会場責任者 ${mgrObj.name}\n電話番号：${mgrObj.tel}` : '会場責任者 未定\n電話番号：未定';
   const closing   = 'お忙しい中お手数おかけいたしますが、ご確認の返信を宜しくお願い致します。';
+  const sender    = (selections.senders || {})[mgrKey] || '';
   const parts = salute ? [salute, greeting, gameBlock, refBlock, mgr, closing] : [greeting, gameBlock, refBlock, mgr, closing];
+  if(sender) parts.push(sender);
   return parts.join('\n\n');
 }
 function buildOut2(g) {
@@ -961,13 +1048,15 @@ function clip(text, msg) {
 
 /* ════════════════════════════════════  STATE  ════════════════════════════════════ */
 async function toggleSt(gid, role, key) {
-  const sk=`${gid}_${role}`;
-  if(!states[sk]) states[sk]={};
-  states[sk][key]=!states[sk][key];
-  await dbSet(`st_${sessionId}`, states);
-  const g=games.find(x=>x.id===gid), ref=g?.refs.find(r=>r.role===role);
-  const row=document.getElementById(`rr-${gid}-${role}`);
-  if(g&&ref&&row) row.replaceWith(makeRefRow(g,ref));
+  const sk = `${sessionId}__${gid}__${role}`;
+  if(!window._allStates) window._allStates = {};
+  if(!window._allStates[sk]) window._allStates[sk] = {};
+  window._allStates[sk][key] = !window._allStates[sk][key];
+  states = window._allStates;
+  const g = games.find(x=>x.id===gid), ref = g?.refs.find(r=>r.role===role);
+  const row = document.getElementById(`rr-${gid}-${role}`);
+  if(g && ref && row) row.replaceWith(makeRefRow(g, ref));
+  schedulePush();
 }
 
 /* ════════════════════════════════════  TOAST  ════════════════════════════════════ */
@@ -977,6 +1066,155 @@ function toast(msg) {
   el.textContent=msg; el.classList.add('show');
   clearTimeout(_tt); _tt=setTimeout(()=>el.classList.remove('show'),2600);
 }
+</script>
+<script>
+/* ════════════════════════════════════
+   GitHub Sync Layer (公開readは無認証・writeはruntimeトークン)
+════════════════════════════════════ */
+const GH_USER = "haruto040630";
+const GH_REPO = "shinpan-renraku";
+const GH_FILE = "data.json";
+const POLL_INTERVAL = 5000;
+const POLL_HIDDEN   = 30000;
+
+function showSyncPill(on) {
+  document.querySelectorAll('.sync-pill').forEach(el => el.classList.toggle('show', !!on));
+}
+
+async function pullDataAnon() {
+  // 公開リポジトリは raw 経由で無認証アクセス可能
+  const url = `https://raw.githubusercontent.com/${GH_USER}/${GH_REPO}/main/${GH_FILE}?t=${Date.now()}`;
+  const res = await fetch(url, { cache: 'no-store' });
+  if(!res.ok) return null;
+  return res.json();
+}
+
+async function pullDataApi() {
+  // SHA取得用 (push時に必要)
+  const url = `https://api.github.com/repos/${GH_USER}/${GH_REPO}/contents/${GH_FILE}`;
+  const opts = { headers: { 'Accept': 'application/vnd.github+json' } };
+  if(GH_TOKEN_RUNTIME) opts.headers['Authorization'] = `Bearer ${GH_TOKEN_RUNTIME}`;
+  const res = await fetch(url, opts);
+  if(!res.ok) return null;
+  const j = await res.json();
+  remoteSha = j.sha;
+  if(j.content) {
+    try {
+      const text = decodeURIComponent(escape(atob(j.content.replace(/\s/g, ''))));
+      return JSON.parse(text);
+    } catch(e) { return null; }
+  }
+  return null;
+}
+
+async function pushData() {
+  if(!GH_TOKEN_RUNTIME) return;
+  if(pushing) { pushQueued = true; return; }
+  pushing = true;
+  try {
+    showSyncPill(true);
+    // 最新SHAを必ず取得
+    if(!remoteSha) await pullDataApi();
+    const data = {
+      v: 2,
+      encryptedToken: remoteEncryptedToken,
+      sessions: sessionsCache,
+      states: window._allStates || {},
+      managers: selections.managers || {},
+      senders:  selections.senders  || {},
+      updated:  Date.now()
+    };
+    lastUpdatedAt = data.updated;
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+    const body = { message: `update ${new Date().toISOString()}`, content };
+    if(remoteSha) body.sha = remoteSha;
+    let res = await fetch(`https://api.github.com/repos/${GH_USER}/${GH_REPO}/contents/${GH_FILE}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${GH_TOKEN_RUNTIME}`,
+        'Accept': 'application/vnd.github+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+    if(res.status === 409 || res.status === 422) {
+      // 競合 → 再取得して再試行
+      await pullDataApi();
+      if(remoteSha) body.sha = remoteSha;
+      res = await fetch(`https://api.github.com/repos/${GH_USER}/${GH_REPO}/contents/${GH_FILE}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${GH_TOKEN_RUNTIME}`,
+          'Accept': 'application/vnd.github+json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+    }
+    if(res.ok) {
+      const j = await res.json();
+      remoteSha = j.content.sha;
+    }
+  } catch(e) {
+    console.warn('push error', e);
+  } finally {
+    pushing = false;
+    showSyncPill(false);
+    if(pushQueued) { pushQueued = false; setTimeout(pushData, 300); }
+  }
+}
+
+function schedulePush() {
+  clearTimeout(pushDebounce);
+  pushDebounce = setTimeout(pushData, 700);
+}
+
+async function applyRemoteData(data) {
+  if(!data) return;
+  remoteEncryptedToken = data.encryptedToken || remoteEncryptedToken;
+  sessionsCache = data.sessions || [];
+  window._allStates = data.states || {};
+  selections.managers = data.managers || {};
+  selections.senders  = data.senders  || {};
+  lastUpdatedAt = data.updated || 0;
+  await dbSet('idx_shared', sessionsCache);
+}
+
+async function syncOnce() {
+  try {
+    const data = await pullDataAnon();
+    if(!data) return;
+    if(data.updated && data.updated > lastUpdatedAt + 100) {
+      await applyRemoteData(data);
+      // 現在の画面を再描画
+      if(document.getElementById('pg-dash').classList.contains('active')) {
+        renderSessions();
+      } else if(document.getElementById('pg-session').classList.contains('active') && sessionId) {
+        const sess = sessionsCache.find(s => s.id === sessionId);
+        if(sess && sess.games) {
+          games = sess.games;
+          states = window._allStates || {};
+          renderCards();
+        }
+      }
+    }
+  } catch(e) { console.warn(e); }
+}
+
+function startSync() {
+  stopSync();
+  syncOnce();
+  syncTimer = setInterval(syncOnce, POLL_INTERVAL);
+}
+function stopSync() {
+  if(syncTimer) { clearInterval(syncTimer); syncTimer = null; }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if(!authed) return;
+  stopSync();
+  syncTimer = setInterval(syncOnce, document.hidden ? POLL_HIDDEN : POLL_INTERVAL);
+});
 </script>
 <!-- PWA-START -->
 <script>
