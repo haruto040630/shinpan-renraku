@@ -113,14 +113,15 @@ body { font-family: -apple-system,'Hiragino Sans','Yu Gothic UI','Meiryo',sans-s
 .sec-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
 
 .sessions-sec { margin-top: 22px; }
-.session-card { background: var(--white); border-radius: 12px; padding: 13px 14px; margin-bottom: 10px; box-shadow: 0 1px 6px rgba(13,27,62,.07); display: flex; align-items: center; gap: 10px; border-left: 3px solid var(--navy3); }
+.session-card { background: var(--white); border-radius: 12px; padding: 12px 12px; margin-bottom: 10px; box-shadow: 0 1px 6px rgba(13,27,62,.07); display: flex; align-items: center; gap: 6px; border-left: 3px solid var(--navy3); flex-wrap: nowrap; }
+@media (max-width: 380px) { .session-card { flex-wrap: wrap; gap: 8px; } .session-card .session-info { width: 100%; } }
 .session-info { flex: 1; min-width: 0; }
 .session-tour { font-size: 14px; font-weight: 700; color: var(--navy); }
 .session-date { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .session-file { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
-.s-open { background: var(--navy); color: var(--white); border: none; border-radius: 8px; padding: 8px 14px; font-size: 12px; font-weight: 700; cursor: pointer; flex-shrink: 0; font-family: inherit; }
+.s-open { background: var(--navy); color: var(--white); border: none; border-radius: 8px; padding: 0 14px; font-size: 12px; font-weight: 700; cursor: pointer; flex-shrink: 0; font-family: inherit; min-height: 44px; min-width: 56px; display: inline-flex; align-items: center; justify-content: center; }
 .s-open:active { filter: brightness(.85); }
-.s-del { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 8px; padding: 8px 10px; font-size: 13px; cursor: pointer; flex-shrink: 0; }
+.s-del { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 8px; padding: 0; font-size: 18px; cursor: pointer; flex-shrink: 0; min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: rgba(178,34,34,.15); touch-action: manipulation; }
 .s-del:active { background: #fee; color: var(--red2); }
 
 .empty-msg { text-align: center; padding: 32px 16px; color: var(--muted); font-size: 14px; }
@@ -186,8 +187,8 @@ body { font-family: -apple-system,'Hiragino Sans','Yu Gothic UI','Meiryo',sans-s
 .no-games { text-align: center; color: var(--muted); padding: 48px 20px; font-size: 14px; }
 
 /* Session card edit button */
-.s-edit { background: none; border: 1px solid var(--border); color: var(--navy3); border-radius: 8px; padding: 8px 10px; font-size: 13px; cursor: pointer; flex-shrink: 0; }
-.s-edit:active { background: #e8ecf5; }
+.s-edit { background: none; border: 1px solid var(--border); color: var(--navy3); border-radius: 8px; padding: 0; font-size: 18px; cursor: pointer; flex-shrink: 0; min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: rgba(31,52,96,.15); touch-action: manipulation; }
+.s-edit:active { background: #e8ecf5; transform: scale(.95); }
 
 /* Session notes display */
 .session-note { font-size: 11px; color: var(--muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
@@ -268,6 +269,7 @@ body { font-family: -apple-system,'Hiragino Sans','Yu Gothic UI','Meiryo',sans-s
         <label class="fl">大会名</label>
         <select class="fi" id="ns-tour">
           <option value="東海学生リーグ">東海学生リーグ</option>
+          <option value="東海学生トーナメント">東海学生トーナメント</option>
         </select>
       </div>
       <div class="date-grid">
@@ -346,6 +348,7 @@ body { font-family: -apple-system,'Hiragino Sans','Yu Gothic UI','Meiryo',sans-s
       <label class="fl">大会名</label>
       <select class="fi" id="em-tour">
         <option value="東海学生リーグ">東海学生リーグ</option>
+        <option value="東海学生トーナメント">東海学生トーナメント</option>
       </select>
     </div>
     <div class="date-grid">
@@ -996,7 +999,8 @@ function buildOut1(g, ref) {
   const {month,day,dow} = g.parsed;
   const lastName  = ref ? ref.name.split(/[\s　]/)[0] : '';
   const salute    = lastName ? `${lastName} 様` : '';
-  const greeting  = 'お世話になっております。\n\n今週末の東海リーグの割り当ての確認の連絡になります。';
+  const tour = (sessionsCache.find(s => s.id === sessionId) || {}).tournament || '東海学生リーグ';
+  const greeting = `お世話になっております。\n\n今週末の${tour}の割り当ての確認の連絡になります。`;
   const gameBlock = [`${month}/${day}（${dow}）`, g.venue, `住所：${g.addr}`, `${g.time}ko`, `${g.teamA} 対 ${g.teamB}`].join('\n');
   const refBlock  = g.refs.map(r=>`${r.role}：${r.name} 様`).join('\n') + (g.assessor ? `\nアセッサー：${g.assessor.name} 様` : '');
   const mgrKey    = `${sessionId}__${g.id}`;
@@ -1011,8 +1015,15 @@ function buildOut1(g, ref) {
 }
 function buildOut2(g) {
   const {month,day} = g.parsed;
+  const stMap = window._allStates || {};
+  const statusOf = r => {
+    const st = stMap[`${sessionId}__${g.id}__${r.role}`] || {};
+    if (st.sent && st.confirmed) return '確認済み';
+    if (st.sent) return 'メッセージ返信待ち';
+    return '未対応';
+  };
   return [g.venue, `${month}月${day}日`, `${g.time}ko`, `${g.teamA} 対 ${g.teamB}`,
-    ...g.refs.map(r=>`${r.role}：${r.name} 様 /確認済み`)
+    ...g.refs.map(r=>`${r.role}：${r.name} 様 /${statusOf(r)}`)
   ].join('\n') + '\n\n━━━━━━━━━━━━';
 }
 function buildOut3(g) {
