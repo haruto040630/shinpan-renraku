@@ -206,6 +206,13 @@ body { font-family: -apple-system,'Hiragino Sans','Yu Gothic UI','Meiryo',sans-s
 .modal-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 6px; }
 
 
+
+/* ── パスワード入力 + 目アイコン ── */
+.pw-wrap { position: relative; }
+.pw-wrap .fi { padding-right: 48px; }
+.pw-eye { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 18px; min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; color: var(--muted); padding: 0; }
+.pw-eye:active { color: var(--navy); transform: translateY(-50%) scale(.92); }
+
 /* ── 試合カード メタ ── */
 .game-meta { padding: 8px 14px; background: #fafbff; border-bottom: 1px solid #edf0f8; }
 .meta-row  { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
@@ -240,7 +247,10 @@ body { font-family: -apple-system,'Hiragino Sans','Yu Gothic UI','Meiryo',sans-s
     <div id="form-login" class="auth-form active" style="margin-top:24px">
       <div class="fg">
         <label class="fl">パスワード</label>
-        <input class="fi" type="password" id="login-pw" placeholder="パスワード" autocomplete="current-password">
+        <div class="pw-wrap">
+          <input class="fi" type="password" id="login-pw" placeholder="パスワード" autocomplete="current-password">
+          <button type="button" class="pw-eye" id="pw-eye-btn" onclick="togglePw()" aria-label="パスワード表示切替">👁</button>
+        </div>
       </div>
       <div class="form-err" id="login-err"></div>
       <button class="fb fb-navy" onclick="doLogin()" id="login-btn">ログイン</button>
@@ -531,7 +541,7 @@ async function hashPw(pw) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw));
   return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
 }
-const SHARED_PW_HASH = "644b7b0a2cb5d741569495388bddbc3819480a681a114ae3eb34f13a0cd5604c";
+const SHARED_PW_HASH = "dfb5d6f4c6bc63a8d1fbc3026ef33b6961dcbc1cc61c94fdd584722966dcf0b0";
 const CRYPTO_SALT = new TextEncoder().encode("shinpan-salt-v1!");
 
 async function deriveKey(password) {
@@ -587,11 +597,25 @@ async function doLogout() {
   GH_TOKEN_RUNTIME = null;
   stopSync();
   sessionsCache = []; window._allStates = {}; selections = { managers:{}, senders:{} };
-  document.getElementById('login-pw').value = '';
+  const pw = document.getElementById('login-pw');
+  pw.value = ''; pw.type = 'password';
+  const eye = document.getElementById('pw-eye-btn');
+  if (eye) eye.textContent = '👁';
   document.getElementById('login-err').textContent = '';
   showPage('pg-login');
 }
 function switchTab(){} // 互換用
+function togglePw() {
+  const pw = document.getElementById('login-pw');
+  const btn = document.getElementById('pw-eye-btn');
+  if (pw.type === 'password') {
+    pw.type = 'text';
+    btn.textContent = '🙈';
+  } else {
+    pw.type = 'password';
+    btn.textContent = '👁';
+  }
+}
 
 /* ════════════════════════════════════  DASHBOARD  ════════════════════════════════════ */
 async function showDash() {
@@ -701,9 +725,9 @@ async function openSession(sid, meta) {
 
 /* ════════════════════════════════════  EDIT SESSION  ════════════════════════════════════ */
 async function openEditModal(sid) {
-  const list = await dbGet(`idx_${userId}`) || [];
+  const list = sessionsCache.length ? sessionsCache : (await dbGet('idx_shared') || []);
   const meta = list.find(s => s.id === sid);
-  if (!meta) return;
+  if (!meta) { alert('セッションが見つかりません'); return; }
   editSid = sid; emBuf = null; emName = '';
   initFormSelects('em', meta);
   document.getElementById('em-tour').value = meta.tournament;
