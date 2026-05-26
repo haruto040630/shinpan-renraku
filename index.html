@@ -214,11 +214,22 @@ body { font-family: -apple-system,'Hiragino Sans','Yu Gothic UI','Meiryo',sans-s
 .pw-eye:active { color: var(--navy); transform: translateY(-50%) scale(.92); }
 
 /* ── 試合カード メタ ── */
-.game-meta { padding: 8px 14px; background: #fafbff; border-bottom: 1px solid #edf0f8; }
-.meta-row  { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
-.meta-row label { font-size: 11px; color: var(--muted); font-weight: 700; min-width: 90px; flex-shrink: 0; }
-.meta-sel  { flex: 1; padding: 7px 8px; border: 1px solid var(--border); border-radius: 7px; font-size: 12px; background: var(--white); font-family: inherit; color: var(--text); min-width: 0; }
+.game-meta { padding: 10px 14px; background: #fafbff; border-bottom: 1px solid #edf0f8; }
+.meta-row  { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 5px 0; }
+.meta-row label { font-size: 11px; color: var(--muted); font-weight: 700; }
+.meta-sel  { width: 100%; padding: 10px 8px; border: 1px solid var(--border); border-radius: 7px; font-size: 14px; background-color: #ffffff; font-family: inherit; color: var(--text); min-height: 44px; -webkit-appearance: menulist; -moz-appearance: menulist; appearance: menulist; box-sizing: border-box; }
 .meta-sel:focus { outline: none; border-color: var(--navy3); }
+
+/* 車両情報・追加伝達事項 ボタン */
+.meta-actions { display: flex; gap: 8px; padding: 8px 0 4px; flex-wrap: wrap; }
+.extra-btn { flex: 1 1 calc(50% - 4px); min-width: 130px; padding: 10px 8px; border: 1.5px solid var(--border); border-radius: 8px; background: var(--white); color: var(--navy); font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; min-height: 44px; -webkit-tap-highlight-color: rgba(13,27,62,.1); touch-action: manipulation; }
+.extra-btn.on { background: var(--navy); color: var(--white); border-color: var(--navy); }
+.extra-btn:active { filter: brightness(.9); transform: scale(.97); }
+
+/* 追加伝達事項テキストエリア */
+.note-editor { padding: 4px 0 8px; }
+.note-text { width: 100%; min-height: 80px; padding: 10px; border: 1.5px solid var(--border); border-radius: 7px; font-size: 14px; font-family: inherit; color: var(--text); resize: vertical; background: var(--white); box-sizing: border-box; }
+.note-text:focus { outline: none; border-color: var(--navy3); }
 
 /* ── スピナー (ノンブロッキング) ── */
 .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: middle; }
@@ -882,19 +893,26 @@ function buildGames(rows) {
     const nr=rows[i], pr=rows[i+1]||[];
     if(!nr||nr.every(v=>!v)){i+=2;continue;}
     if(isPresent(nr[0])) league=String(nr[0]);
-    const match = isPresent(nr[1]) ? String(nr[1]) : '';
+    const match = isPresent(nr[1]) ? String(nr[1]) : '未定';
     const date  = isPresent(nr[2]) ? String(nr[2]).split('T')[0] : '';
-    const time  = fmtTime(nr[3]);
-    const venue = isPresent(nr[4]) ? String(nr[4]).replace(/\s+/g,' ').trim() : '';
-    const teamA = isPresent(nr[5]) ? String(nr[5]) : '';
-    const teamB = isPresent(nr[6]) ? String(nr[6]) : '';
+    const time  = nr[3] ? fmtTime(nr[3]) : '未定';
+    const venue = isPresent(nr[4]) ? String(nr[4]).replace(/\s+/g,' ').trim() : '未定';
+    const teamA = isPresent(nr[5]) ? String(nr[5]) : '未定';
+    const teamB = isPresent(nr[6]) ? String(nr[6]) : '未定';
     const id    = `${date}_${time}_${teamA}_${teamB}`.replace(/[\s\/]/g,'_');
     const {addr,ok:addrOk} = matchVenue(venue);
     const parsed = parseDateStr(date);
     const refs = [];
     [[7,'主審'],[8,'AR1'],[9,'AR2']].forEach(([col,role])=>{
-      if(!isPresent(nr[col])) return;
-      refs.push({role, name:String(nr[col]).trim(), tel:fmtPhone(pr[col])});
+      const cellVal = nr[col];
+      // 「帯同」は意図的な空欄なので行ごと省略（仕様通り）
+      if(cellVal != null && String(cellVal).trim() === '帯同') return;
+      // 主審は必ず行を残す（未定でも）。AR1/AR2 は空なら 未定 として表示
+      if(!isPresent(cellVal)) {
+        refs.push({role, name:'未定', tel:''});
+        return;
+      }
+      refs.push({role, name:String(cellVal).trim(), tel:fmtPhone(pr[col])});
     });
     let assessor=null;
     if(isPresent(nr[10])) assessor={name:String(nr[10]).trim(), tel:fmtPhone(pr[10])};
@@ -935,8 +953,13 @@ function makeCard(g) {
   const card = document.createElement('div');
   card.className = 'game-card';
   card.id = 'gc-'+g.id;
-  const mgrIdx = (selections.managers || {})[`${sessionId}__${g.id}`];
-  const sender = (selections.senders  || {})[`${sessionId}__${g.id}`] || '';
+  const sKey   = `${sessionId}__${g.id}`;
+  const mgrIdx = (selections.managers || {})[sKey];
+  const sender = (selections.senders  || {})[sKey] || '';
+  const vehicle = !!(selections.vehicle || {})[sKey];
+  const noteText = (selections.notes || {})[sKey];
+  const noteOpen = noteText != null; // null/undefined なら非表示
+  const safeNote = (noteText || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   card.innerHTML = `
     <div class="game-head">
       <div class="game-label">${g.league}　${g.match}</div>
@@ -963,11 +986,29 @@ function makeCard(g) {
           ${SENDERS.map(s=>`<option value="${s}"${s===sender?' selected':''}>${s}</option>`).join('')}
         </select>
       </div>
+      <div class="meta-actions">
+        <button type="button" class="extra-btn ${vehicle?'on':''}" data-gid="${g.id}" data-key="vehicle">🚗 車両情報${vehicle?'追加済':'追加'}</button>
+        <button type="button" class="extra-btn ${noteOpen?'on':''}" data-gid="${g.id}" data-key="note-toggle">📝 追加伝達事項${noteOpen?'✓':''}</button>
+      </div>
+      ${noteOpen ? `<div class="note-editor"><textarea class="note-text" data-gid="${g.id}" placeholder="この試合の審判員全員の出力1に追加するメッセージを入力">${safeNote}</textarea></div>` : ''}
     </div>
   `;
   card.querySelectorAll('.meta-sel').forEach(sel => {
     sel.onchange = e => onMetaChange(e.currentTarget.dataset.gid, e.currentTarget.dataset.key, e.currentTarget.value);
   });
+  card.querySelectorAll('.extra-btn').forEach(btn => {
+    btn.onclick = e => onMetaChange(e.currentTarget.dataset.gid, e.currentTarget.dataset.key, null);
+  });
+  const ta = card.querySelector('.note-text');
+  if(ta) {
+    let noteTimer = null;
+    ta.oninput = e => {
+      clearTimeout(noteTimer);
+      const v = e.currentTarget.value;
+      const id = e.currentTarget.dataset.gid;
+      noteTimer = setTimeout(() => onMetaChange(id, 'note-text', v), 400);
+    };
+  }
   g.refs.forEach(ref => card.appendChild(makeRefRow(g, ref)));
   const footer = document.createElement('div');
   footer.className = 'game-footer';
@@ -977,15 +1018,34 @@ function makeCard(g) {
   return card;
 }
 function onMetaChange(gid, key, val) {
-  const k = `${sessionId}__${gid}`;
+  const sKey = `${sessionId}__${gid}`;
+  let rerender = false;
   if(key === 'manager') {
     selections.managers = selections.managers || {};
-    if(val === '') delete selections.managers[k];
-    else selections.managers[k] = +val;
+    if(val === '') delete selections.managers[sKey];
+    else selections.managers[sKey] = +val;
   } else if(key === 'sender') {
     selections.senders = selections.senders || {};
-    if(val === '') delete selections.senders[k];
-    else selections.senders[k] = val;
+    if(val === '') delete selections.senders[sKey];
+    else selections.senders[sKey] = val;
+  } else if(key === 'vehicle') {
+    selections.vehicle = selections.vehicle || {};
+    if(selections.vehicle[sKey]) delete selections.vehicle[sKey];
+    else selections.vehicle[sKey] = true;
+    rerender = true;
+  } else if(key === 'note-toggle') {
+    selections.notes = selections.notes || {};
+    if(selections.notes[sKey] != null) delete selections.notes[sKey];
+    else selections.notes[sKey] = '';
+    rerender = true;
+  } else if(key === 'note-text') {
+    selections.notes = selections.notes || {};
+    selections.notes[sKey] = val || '';
+  }
+  if(rerender) {
+    const g = games.find(x => x.id === gid);
+    const card = document.getElementById('gc-'+gid);
+    if(g && card) card.replaceWith(makeCard(g));
   }
   schedulePush();
 }
@@ -1023,18 +1083,24 @@ function buildOut1(g, ref) {
   const {month,day,dow} = g.parsed;
   const lastName  = ref ? ref.name.split(/[\s　]/)[0] : '';
   const salute    = lastName ? `${lastName} 様` : '';
-  const tour = (sessionsCache.find(s => s.id === sessionId) || {}).tournament || '東海学生リーグ';
-  const greeting = `お世話になっております。\n\n今週末の${tour}の割り当ての確認の連絡になります。`;
+  const tour      = (sessionsCache.find(s => s.id === sessionId) || {}).tournament || '東海学生リーグ';
+  const greeting  = `お世話になっております。\n\n今週末の${tour}の割り当ての確認の連絡になります。`;
   const gameBlock = [`${month}/${day}（${dow}）`, g.venue, `住所：${g.addr}`, `${g.time}ko`, `${g.teamA} 対 ${g.teamB}`].join('\n');
   const refBlock  = g.refs.map(r=>`${r.role}：${r.name} 様`).join('\n') + (g.assessor ? `\nアセッサー：${g.assessor.name} 様` : '');
-  const mgrKey    = `${sessionId}__${g.id}`;
-  const mgrIdx    = (selections.managers || {})[mgrKey];
+  const sKey      = `${sessionId}__${g.id}`;
+  const mgrIdx    = (selections.managers || {})[sKey];
   const mgrObj    = (mgrIdx != null && MANAGERS[mgrIdx]) ? MANAGERS[mgrIdx] : null;
   const mgr       = mgrObj ? `会場責任者 ${mgrObj.name}\n電話番号：${mgrObj.tel}` : '会場責任者 未定\n電話番号：未定';
+  const vehicle   = !!(selections.vehicle || {})[sKey];
+  const VEHICLE_TEXT = "又、当日の駐車場登録をさせて頂きたいため、車情報を教えて頂きたいです。以下をコピーしてそのまま送信お願いいたします。\n━━━━━━━━━━\n名前：\n電話番号：\n車種：\n車の色：\n一連指定番号(4桁)：\n分類番号(3桁)：\n平仮名：\n地域：\n━━━━━━━━━━";
+  const extraNote = ((selections.notes || {})[sKey] || '').trim();
   const closing   = 'お忙しい中お手数おかけいたしますが、ご確認の返信を宜しくお願い致します。';
-  const sender    = (selections.senders || {})[mgrKey] || '';
-  const parts = salute ? [salute, greeting, gameBlock, refBlock, mgr, closing] : [greeting, gameBlock, refBlock, mgr, closing];
-  if(sender) parts.push(sender);
+  const sender    = (selections.senders || {})[sKey] || '';
+  const parts = salute ? [salute, greeting, gameBlock, refBlock, mgr] : [greeting, gameBlock, refBlock, mgr];
+  if(vehicle)   parts.push(VEHICLE_TEXT);
+  if(extraNote) parts.push(extraNote);
+  parts.push(closing);
+  if(sender)    parts.push(sender);
   return parts.join('\n\n');
 }
 function buildOut2(g) {
