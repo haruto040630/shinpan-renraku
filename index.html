@@ -552,7 +552,7 @@ async function hashPw(pw) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw));
   return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
 }
-const SHARED_PW_HASH = "dfb5d6f4c6bc63a8d1fbc3026ef33b6961dcbc1cc61c94fdd584722966dcf0b0";
+const SHARED_PW_HASH = "09cf7faebdaaca81fcbfefc92a157ae304ce499318a2743a2fdbdde6222ec264";
 const CRYPTO_SALT = new TextEncoder().encode("shinpan-salt-v1!");
 
 async function deriveKey(password) {
@@ -763,6 +763,7 @@ function closeEditModal(e) {
   editSid = null; emBuf = null; emName = '';
 }
 async function saveEdit() {
+  const tour  = document.getElementById('em-tour').value;
   const year  = document.getElementById('em-year').value;
   const month = document.getElementById('em-month').value;
   const day1  = document.getElementById('em-day1').value;
@@ -775,7 +776,7 @@ async function saveEdit() {
   err.textContent = '';
   const idx = sessionsCache.findIndex(s => s.id === editSid);
   if (idx < 0) return;
-  sessionsCache[idx] = { ...sessionsCache[idx], year:+year, month:+month, day1:+day1, day2: day2 ? +day2 : null, note };
+  sessionsCache[idx] = { ...sessionsCache[idx], tournament: tour, year:+year, month:+month, day1:+day1, day2: day2 ? +day2 : null, note };
   if (emBuf) {
     showSyncPill(true);
     const wb = XLSX.read(emBuf, { type:'array', cellDates:true });
@@ -887,42 +888,90 @@ function isPresent(v) {
 /* ════════════════════════════════════  BUILD GAMES  ════════════════════════════════════ */
 function buildGames(rows) {
   games = [];
+  const headerIdx = findHeaderRow(rows);
+  let cols, dataStart;
+  if (headerIdx >= 0) {
+    cols = findCols(rows[headerIdx]);
+    dataStart = headerIdx + 1;
+  } else {
+    cols = { league:0, match:1, date:2, time:3, venue:4, teamA:5, teamB:6, main:7, ar1:8, ar2:9, assessor:10 };
+    dataStart = 0;
+  }
   let league = '';
-  let i = 1;
-  while(i < rows.length) {
-    const nr=rows[i], pr=rows[i+1]||[];
-    if(!nr||nr.every(v=>!v)){i+=2;continue;}
-    if(isPresent(nr[0])) league=String(nr[0]);
-    const match = isPresent(nr[1]) ? String(nr[1]) : '未定';
-    const date  = isPresent(nr[2]) ? String(nr[2]).split('T')[0] : '';
-    const time  = nr[3] ? fmtTime(nr[3]) : '未定';
-    const venue = isPresent(nr[4]) ? String(nr[4]).replace(/\s+/g,' ').trim() : '未定';
-    const teamA = isPresent(nr[5]) ? String(nr[5]) : '未定';
-    const teamB = isPresent(nr[6]) ? String(nr[6]) : '未定';
-    const id    = `${date}_${time}_${teamA}_${teamB}`.replace(/[\s\/]/g,'_');
-    const {addr,ok:addrOk} = matchVenue(venue);
+  let i = dataStart;
+  while (i < rows.length) {
+    const nr = rows[i] || [], pr = rows[i + 1] || [];
+    if (!nr || nr.every(v => !v)) { i += 2; continue; }
+    const cell   = (key) => cols[key] >= 0 ? nr[cols[key]] : null;
+    const cellPr = (key) => cols[key] >= 0 ? pr[cols[key]] : null;
+    if (isPresent(cell('league'))) league = String(cell('league'));
+    const matchName = isPresent(cell('match')) ? String(cell('match')) : '未定';
+    const date  = isPresent(cell('date')) ? String(cell('date')).split('T')[0] : '';
+    const time  = isPresent(cell('time')) ? fmtTime(cell('time')) : '未定';
+    const venue = isPresent(cell('venue')) ? String(cell('venue')).replace(/\s+/g,' ').trim() : '未定';
+    const teamA = isPresent(cell('teamA')) ? String(cell('teamA')) : '未定';
+    const teamB = isPresent(cell('teamB')) ? String(cell('teamB')) : '未定';
+    const id    = `${date}_${time}_${teamA}_${teamB}`.replace(/[\s\/]/g, '_');
+    const {addr, ok: addrOk} = matchVenue(venue);
     const parsed = parseDateStr(date);
     const refs = [];
-    [[7,'主審'],[8,'AR1'],[9,'AR2']].forEach(([col,role])=>{
-      const cellVal = nr[col];
-      // 「帯同」は意図的な空欄なので行ごと省略（仕様通り）
-      if(cellVal != null && String(cellVal).trim() === '帯同') return;
-      // 主審は必ず行を残す（未定でも）。AR1/AR2 は空なら 未定 として表示
-      if(!isPresent(cellVal)) {
-        refs.push({role, name:'未定', tel:''});
-        return;
+    const roleMap = [['main','主審'],['ar1','AR1'],['ar2','AR2']];
+    for (const [key, role] of roleMap) {
+      if (cols[key] < 0) continue;
+      const v = cell(key);
+      const sv = v != null ? String(v).trim() : '';
+      if (sv === '帯同') continue;
+      if (!isPresent(v)) {
+        if (key === 'main') refs.push({role, name:'未定', tel:''});
+        continue;
       }
-      refs.push({role, name:String(cellVal).trim(), tel:fmtPhone(pr[col])});
-    });
-    let assessor=null;
-    if(isPresent(nr[10])) assessor={name:String(nr[10]).trim(), tel:fmtPhone(pr[10])};
-    games.push({id,league,match,date,parsed,time,venue,addr,addrOk,teamA,teamB,pref:detectPref(venue),refs,assessor});
-    i+=2;
+      refs.push({role, name: sv, tel: fmtPhone(cellPr(key))});
+    }
+    let assessor = null;
+    if (cols.assessor >= 0 && isPresent(cell('assessor'))) {
+      assessor = { name: String(cell('assessor')).trim(), tel: fmtPhone(cellPr('assessor')) };
+    }
+    games.push({ id, league, match: matchName, date, parsed, time, venue, addr, addrOk, teamA, teamB, pref: detectPref(venue), refs, assessor });
+    i += 2;
   }
-  prefs = ['愛知','岐阜','三重','静岡'].filter(p=>games.some(g=>g.pref===p));
+  prefs = ['愛知','岐阜','三重','静岡'].filter(p => games.some(g => g.pref === p));
   pref = 'all';
   renderTabs();
   renderCards();
+}
+
+function findHeaderRow(rows) {
+  for (let i = 0; i < Math.min(rows.length, 10); i++) {
+    const row = rows[i] || [];
+    let count = 0;
+    for (const c of row) {
+      if (!c) continue;
+      const s = String(c).replace(/\s+/g, '');
+      if (/チーム|主審|副審|会場|開催日|キックオフ|大会名|試合名|アセッサー/.test(s)) count++;
+    }
+    if (count >= 3) return i;
+  }
+  return -1;
+}
+
+function findCols(headerRow) {
+  const h = (headerRow || []).map(c => String(c || '').replace(/\s+/g, ''));
+  const find = (re_) => { for (let i = 0; i < h.length; i++) if (re_.test(h[i])) return i; return -1; };
+  const auxCols = [];
+  for (let i = 0; i < h.length; i++) if (/副審/.test(h[i])) auxCols.push(i);
+  return {
+    league:   find(/大会名/),
+    match:    find(/試合名|^第?\d+節/),
+    date:     find(/開催日|日付/),
+    time:     find(/キックオフ|^KO$|kickoff/i),
+    venue:    find(/会場名|^会場/),
+    teamA:    find(/チーム[AＡ1１aA]/),
+    teamB:    find(/チーム[BＢ2２bB]/),
+    main:     find(/主審/),
+    ar1:      auxCols[0] != null ? auxCols[0] : -1,
+    ar2:      auxCols[1] != null ? auxCols[1] : -1,
+    assessor: find(/アセッサー/)
+  };
 }
 
 /* ════════════════════════════════════  TABS  ════════════════════════════════════ */
@@ -1175,46 +1224,46 @@ function toast(msg) {
 const GH_USER = "haruto040630";
 const GH_REPO = "shinpan-renraku";
 const GH_FILE = "data.json";
-const POLL_INTERVAL = 5000;
-const POLL_HIDDEN   = 30000;
+const POLL_INTERVAL = 3000;
+const POLL_HIDDEN   = 60000;
 
 function showSyncPill(on) {
   document.querySelectorAll('.sync-pill').forEach(el => el.classList.toggle('show', !!on));
 }
 
+let lastETag = null;
 async function pullDataAnon() {
-  // 公開リポジトリは raw 経由で無認証アクセス可能
-  const url = `https://raw.githubusercontent.com/${GH_USER}/${GH_REPO}/main/${GH_FILE}?t=${Date.now()}`;
-  const res = await fetch(url, { cache: 'no-store' });
-  if(!res.ok) return null;
-  return res.json();
+  return pullDataApi();
 }
-
 async function pullDataApi() {
-  // SHA取得用 (push時に必要)
   const url = `https://api.github.com/repos/${GH_USER}/${GH_REPO}/contents/${GH_FILE}`;
-  const opts = { headers: { 'Accept': 'application/vnd.github+json' } };
-  if(GH_TOKEN_RUNTIME) opts.headers['Authorization'] = `Bearer ${GH_TOKEN_RUNTIME}`;
-  const res = await fetch(url, opts);
-  if(!res.ok) return null;
-  const j = await res.json();
-  remoteSha = j.sha;
-  if(j.content) {
-    try {
+  const headers = { 'Accept': 'application/vnd.github+json' };
+  if (lastETag) headers['If-None-Match'] = lastETag;
+  if (GH_TOKEN_RUNTIME) headers['Authorization'] = `Bearer ${GH_TOKEN_RUNTIME}`;
+  try {
+    const res = await fetch(url, { headers, cache: 'no-store' });
+    if (res.status === 304) return { __unchanged: true };
+    if (!res.ok) return null;
+    const newTag = res.headers.get('ETag');
+    if (newTag) lastETag = newTag;
+    const j = await res.json();
+    remoteSha = j.sha;
+    if (j.content) {
       const text = decodeURIComponent(escape(atob(j.content.replace(/\s/g, ''))));
       return JSON.parse(text);
-    } catch(e) { return null; }
+    }
+    return null;
+  } catch(e) {
+    console.warn('pull error', e);
+    return null;
   }
-  return null;
 }
-
 async function pushData() {
   if(!GH_TOKEN_RUNTIME) return;
   if(pushing) { pushQueued = true; return; }
   pushing = true;
   try {
     showSyncPill(true);
-    // 最新SHAを必ず取得
     if(!remoteSha) await pullDataApi();
     const data = {
       v: 2,
@@ -1223,13 +1272,15 @@ async function pushData() {
       states: window._allStates || {},
       managers: selections.managers || {},
       senders:  selections.senders  || {},
+      vehicle:  selections.vehicle  || {},
+      notes:    selections.notes    || {},
       updated:  Date.now()
     };
     lastUpdatedAt = data.updated;
     const content = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
     const body = { message: `update ${new Date().toISOString()}`, content };
     if(remoteSha) body.sha = remoteSha;
-    let res = await fetch(`https://api.github.com/repos/${GH_USER}/${GH_REPO}/contents/${GH_FILE}`, {
+    const doPut = async () => fetch(`https://api.github.com/repos/${GH_USER}/${GH_REPO}/contents/${GH_FILE}`, {
       method: 'PUT',
       headers: {
         'Authorization': `Bearer ${GH_TOKEN_RUNTIME}`,
@@ -1238,53 +1289,49 @@ async function pushData() {
       },
       body: JSON.stringify(body)
     });
+    let res = await doPut();
     if(res.status === 409 || res.status === 422) {
-      // 競合 → 再取得して再試行
       await pullDataApi();
       if(remoteSha) body.sha = remoteSha;
-      res = await fetch(`https://api.github.com/repos/${GH_USER}/${GH_REPO}/contents/${GH_FILE}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${GH_TOKEN_RUNTIME}`,
-          'Accept': 'application/vnd.github+json',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body)
-      });
+      res = await doPut();
     }
     if(res.ok) {
       const j = await res.json();
       remoteSha = j.content.sha;
+      lastETag = null;
     }
   } catch(e) {
     console.warn('push error', e);
   } finally {
     pushing = false;
     showSyncPill(false);
-    if(pushQueued) { pushQueued = false; setTimeout(pushData, 300); }
+    if(pushQueued) { pushQueued = false; setTimeout(pushData, 200); }
   }
 }
 
 function schedulePush() {
   clearTimeout(pushDebounce);
-  pushDebounce = setTimeout(pushData, 700);
+  pushDebounce = setTimeout(pushData, 250);
 }
 
 async function applyRemoteData(data) {
-  if(!data) return;
+  if(!data || data.__unchanged) return;
   remoteEncryptedToken = data.encryptedToken || remoteEncryptedToken;
   sessionsCache = data.sessions || [];
   window._allStates = data.states || {};
   selections.managers = data.managers || {};
   selections.senders  = data.senders  || {};
+  selections.vehicle  = data.vehicle  || {};
+  selections.notes    = data.notes    || {};
   lastUpdatedAt = data.updated || 0;
   await dbSet('idx_shared', sessionsCache);
 }
 
 async function syncOnce() {
   try {
-    const data = await pullDataAnon();
+    const data = await pullDataApi();
     if(!data) return;
+    if(data.__unchanged) return;
     if(data.updated && data.updated > lastUpdatedAt + 100) {
       await applyRemoteData(data);
       // 現在の画面を再描画
