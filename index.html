@@ -495,7 +495,7 @@ let remoteEncryptedToken = null;
 let syncTimer = null, pushDebounce = null;
 let pushing = false, pushQueued = false;
 let lastUpdatedAt = 0;
-let selections = { managers: {}, senders: {} };
+let selections = { managers: {}, senders: {}, vehicle: {}, notes: {} };
 let GH_TOKEN_RUNTIME = null;
 window._allStates = {};
 
@@ -555,6 +555,7 @@ async function hashPw(pw) {
 }
 const SHARED_PW_HASH = "09cf7faebdaaca81fcbfefc92a157ae304ce499318a2743a2fdbdde6222ec264";
 const CRYPTO_SALT = new TextEncoder().encode("shinpan-salt-v1!");
+let cachedCryptoKey = null;
 
 async function deriveKey(password) {
   const baseKey = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
@@ -562,16 +563,31 @@ async function deriveKey(password) {
     { name:'PBKDF2', salt: CRYPTO_SALT, iterations: 100000, hash: 'SHA-256' },
     baseKey,
     { name:'AES-GCM', length: 256 },
-    false, ['decrypt']
+    false,
+    ['encrypt', 'decrypt']
   );
 }
-async function decryptToken(b64, password) {
+async function encryptStr(plaintext, key) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, new TextEncoder().encode(plaintext));
+  const combined = new Uint8Array(iv.length + ct.byteLength);
+  combined.set(iv, 0);
+  combined.set(new Uint8Array(ct), iv.length);
+  let bin = '';
+  for (let i = 0; i < combined.length; i++) bin += String.fromCharCode(combined[i]);
+  return btoa(bin);
+}
+async function decryptStr(b64, key) {
   const data = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
   const iv = data.slice(0, 12);
   const ct = data.slice(12);
-  const key = await deriveKey(password);
   const pt = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, key, ct);
   return new TextDecoder().decode(pt);
+}
+// 互換用（旧形式 encryptedToken の復号にも使う）
+async function decryptToken(b64, password) {
+  const key = await deriveKey(password);
+  return decryptStr(b64, key);
 }
 
 async function doLogin() {
@@ -585,10 +601,26 @@ async function doLogin() {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> 接続中...';
   try {
-    // 公開 data.json を取得 (匿名読込)
-    const initData = await pullDataAnon();
-    if(initData && initData.encryptedToken) {
-      GH_TOKEN_RUNTIME = await decryptToken(initData.encryptedToken, pw);
+    // 鍵を導出してセッション中キャッシュ
+    cachedCryptoKey = await deriveKey(pw);
+    // data.json 取得（公開リポジトリは無認証で読める）
+    const initData = await pullDataApi();
+    if (initData && initData.encryptedPayload) {
+      // v3: 全データ暗号化形式
+      const plaintext = await decryptStr(initData.encryptedPayload, cachedCryptoKey);
+      const dec = JSON.parse(plaintext);
+      GH_TOKEN_RUNTIME = dec.token;
+      sessionsCache = dec.sessions || [];
+      window._allStates = dec.states || {};
+      selections.managers = dec.managers || {};
+      selections.senders  = dec.senders  || {};
+      selections.vehicle  = dec.vehicle  || {};
+      selections.notes    = dec.notes    || {};
+      lastUpdatedAt = initData.updated || 0;
+      await dbSet('idx_shared', sessionsCache);
+    } else if (initData && initData.encryptedToken) {
+      // v2 互換: 旧形式（暗号化トークン分離型）
+      GH_TOKEN_RUNTIME = await decryptStr(initData.encryptedToken, cachedCryptoKey);
       await applyRemoteData(initData);
     }
     authed = true;
@@ -597,6 +629,7 @@ async function doLogin() {
   } catch(e) {
     console.error(e);
     err.textContent = '接続に失敗しました（パスワード再確認）';
+    cachedCryptoKey = null;
     btn.disabled = false;
     btn.innerHTML = 'ログイン';
     return;
@@ -607,8 +640,9 @@ async function doLogin() {
 async function doLogout() {
   authed = false;
   GH_TOKEN_RUNTIME = null;
+  cachedCryptoKey = null;
   stopSync();
-  sessionsCache = []; window._allStates = {}; selections = { managers:{}, senders:{} };
+  sessionsCache = []; window._allStates = {}; selections = { managers:{}, senders:{}, vehicle:{}, notes:{} };
   const pw = document.getElementById('login-pw');
   pw.value = ''; pw.type = 'password';
   const eye = document.getElementById('pw-eye-btn');
@@ -1260,22 +1294,27 @@ async function pullDataApi() {
   }
 }
 async function pushData() {
-  if(!GH_TOKEN_RUNTIME) return;
+  if(!GH_TOKEN_RUNTIME || !cachedCryptoKey) return;
   if(pushing) { pushQueued = true; return; }
   pushing = true;
   try {
     showSyncPill(true);
     if(!remoteSha) await pullDataApi();
-    const data = {
-      v: 2,
-      encryptedToken: remoteEncryptedToken,
+    // 全データを暗号化
+    const payload = {
+      token: GH_TOKEN_RUNTIME,
       sessions: sessionsCache,
       states: window._allStates || {},
       managers: selections.managers || {},
       senders:  selections.senders  || {},
       vehicle:  selections.vehicle  || {},
-      notes:    selections.notes    || {},
-      updated:  Date.now()
+      notes:    selections.notes    || {}
+    };
+    const encryptedPayload = await encryptStr(JSON.stringify(payload), cachedCryptoKey);
+    const data = {
+      v: 3,
+      encryptedPayload,
+      updated: Date.now()
     };
     lastUpdatedAt = data.updated;
     const content = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
@@ -1317,13 +1356,31 @@ function schedulePush() {
 
 async function applyRemoteData(data) {
   if(!data || data.__unchanged) return;
-  remoteEncryptedToken = data.encryptedToken || remoteEncryptedToken;
-  sessionsCache = data.sessions || [];
-  window._allStates = data.states || {};
-  selections.managers = data.managers || {};
-  selections.senders  = data.senders  || {};
-  selections.vehicle  = data.vehicle  || {};
-  selections.notes    = data.notes    || {};
+  // v3 形式: 全データ暗号化ペイロード
+  if(data.encryptedPayload && cachedCryptoKey) {
+    try {
+      const plaintext = await decryptStr(data.encryptedPayload, cachedCryptoKey);
+      const dec = JSON.parse(plaintext);
+      sessionsCache = dec.sessions || [];
+      window._allStates = dec.states || {};
+      selections.managers = dec.managers || {};
+      selections.senders  = dec.senders  || {};
+      selections.vehicle  = dec.vehicle  || {};
+      selections.notes    = dec.notes    || {};
+      // tokenが更新されていれば反映（パスワード変更時等）
+      if(dec.token) GH_TOKEN_RUNTIME = dec.token;
+    } catch(e) {
+      console.warn('decrypt failed', e);
+    }
+  } else {
+    // v2 互換
+    sessionsCache = data.sessions || [];
+    window._allStates = data.states || {};
+    selections.managers = data.managers || {};
+    selections.senders  = data.senders  || {};
+    selections.vehicle  = data.vehicle  || {};
+    selections.notes    = data.notes    || {};
+  }
   lastUpdatedAt = data.updated || 0;
   await dbSet('idx_shared', sessionsCache);
 }
