@@ -553,7 +553,7 @@ async function hashPw(pw) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw));
   return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
 }
-const SHARED_PW_HASH = "09cf7faebdaaca81fcbfefc92a157ae304ce499318a2743a2fdbdde6222ec264";
+const SHARED_PW_HASH = "0afacdfb4675ed9d546418e96b2bb84bee77a0cafb8e5725a7322f310b96d97a";
 const CRYPTO_SALT = new TextEncoder().encode("shinpan-salt-v1!");
 let cachedCryptoKey = null;
 
