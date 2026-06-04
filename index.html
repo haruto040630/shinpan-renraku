@@ -150,7 +150,15 @@ body { font-family: -apple-system,'Hiragino Sans','Yu Gothic UI','Meiryo',sans-s
 
 /* Game card */
 .game-card { background: var(--white); border-radius: 14px; overflow: hidden; margin-bottom: 14px; box-shadow: 0 1px 8px rgba(13,27,62,.1); }
-.game-head { background: linear-gradient(135deg, var(--navy) 0%, var(--navy3) 100%); color: var(--white); padding: 12px 14px 10px; }
+.game-head { background: linear-gradient(135deg, var(--navy) 0%, var(--navy3) 100%); color: var(--white); padding: 12px 14px 10px; position: relative; }
+.game-edit-btn { position: absolute; top: 8px; right: 8px; background: rgba(255,255,255,.16); color: #fff; border: 1px solid rgba(255,255,255,.32); border-radius: 7px; padding: 7px 11px; font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit; -webkit-tap-highlight-color: rgba(255,255,255,.2); touch-action: manipulation; min-height: 34px; z-index: 2; }
+.game-edit-btn:active { background: rgba(255,255,255,.3); transform: scale(.96); }
+.ge-sec { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; margin: 16px 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.ge-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ge-hint { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+.ge-ref-row { display: grid; grid-template-columns: 72px 1fr 1fr; gap: 8px; align-items: center; margin-bottom: 8px; }
+.ge-ref-row label { font-size: 12px; font-weight: 700; color: var(--text); }
+.ge-ref-row .fi { padding: 9px 10px; font-size: 13px; }
 .game-label { font-size: 11px; font-weight: 600; opacity: .65; letter-spacing: .3px; }
 .game-vs { font-size: 17px; font-weight: 800; margin: 3px 0 5px; line-height: 1.25; }
 .game-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 5px; }
@@ -415,9 +423,10 @@ body { font-family: -apple-system,'Hiragino Sans','Yu Gothic UI','Meiryo',sans-s
 </div>
 
 <!-- 試合編集モーダル -->
-<div id="game-edit-modal" class="modal">
-  <div class="modal-content">
-    <div style="font-size:17px;font-weight:800;color:var(--navy);margin-bottom:4px">試合情報を編集</div>
+<div id="game-edit-modal" class="modal-overlay" onclick="closeGameEditModal(event)">
+  <div class="modal-box">
+    <div class="modal-drag"></div>
+    <div class="modal-title">✏ 試合情報を編集</div>
     <div class="ge-hint">変更内容は全端末に同期されます</div>
 
     <div class="ge-sec">試合情報</div>
@@ -500,7 +509,7 @@ const VENUE_MAP = {
   '小笠山総合運動公園補助競技場': '静岡県袋井市愛野２３００−１',
 };
 
-const MANAGERS = [{"name": "山田晴翔", "tel": "090-5108-4633"}, {"name": "政岡将樹", "tel": "080-6945-0941"}, {"name": "横田優希", "tel": "080-6509-1180"}, {"name": "松尾侑一", "tel": "080-3962-1337"}, {"name": "齊田勇人", "tel": "090-1092-1780"}, {"name": "野本朋希", "tel": "090-2729-7988"}, {"name": "梅原凌", "tel": "080-9739-3450"}, {"name": "林唯人", "tel": "070-4165-1644"}, {"name": "中村茉歩", "tel": "090-4405-5866"}, {"name": "小林隼大", "tel": "080-6509-1180"}, {"name": "細山周佑", "tel": "070-4422-5822"}, {"name": "金澤史奈", "tel": "090-4113-2375"}, {"name": "竹本咲", "tel": "090-9796-0352"}, {"name": "奥野遥斗", "tel": "080-3670-8686"}, {"name": "山本陽菜乃", "tel": "070-3861-1448"}, {"name": "小林隼大", "tel": "070-4212-9046"}, {"name": "小川航輝", "tel": "090-5053-2047"}, {"name": "佐原凪咲", "tel": "080-4210-1845"}, {"name": "鈴木瑛士", "tel": "080-5158-4400"}, {"name": "梅村姫果", "tel": "080-6916-8422"}, {"name": "八嶋栞", "tel": "080-9117-0329"}, {"name": "森田湊和", "tel": "090-6646-9693"}, {"name": "塩崎拓真", "tel": "090-7694-1815"}, {"name": "藤田祥真", "tel": "080-7435-9086"}, {"name": "中根徠雄", "tel": "080-2636-0815"}, {"name": "加藤陽斗", "tel": "080-3645-2929"}, {"name": "牟田翔一", "tel": "090-2979-1784"}, {"name": "安達琉空", "tel": "090-5239-4943"}, {"name": "應原颯太郎", "tel": "090-3441-3023"}, {"name": "大石隼之介", "tel": "090-3150-4617"}];
+const MANAGERS = [{"name": "山田晴翔", "tel": "090-5108-4633"}, {"name": "政岡将樹", "tel": "080-6945-0941"}, {"name": "横田優希", "tel": "080-6509-1180"}, {"name": "松尾侑一", "tel": "080-3962-1337"}, {"name": "齊田勇人", "tel": "090-1092-1780"}, {"name": "野本朋希", "tel": "090-2729-7988"}, {"name": "梅原凌", "tel": "080-9739-3450"}, {"name": "林唯人", "tel": "070-4165-1644"}, {"name": "中村茉歩", "tel": "090-4405-5866"}, {"name": "小林隼大", "tel": "080-6509-1180"}, {"name": "細山周佑", "tel": "070-4422-5822"}, {"name": "金澤史奈", "tel": "090-4113-2375"}, {"name": "竹本咲", "tel": "090-9796-0352"}, {"name": "奥野遥斗", "tel": "080-3670-8686"}, {"name": "山本陽菜乃", "tel": "070-3861-1448"}, {"name": "小林隼大", "tel": "070-4212-9046"}, {"name": "小川航輝", "tel": "090-5053-2047"}, {"name": "佐原凪咲", "tel": "080-4210-1845"}, {"name": "鈴木瑛士", "tel": "080-5158-4400"}, {"name": "梅村姫果", "tel": "080-6916-8422"}, {"name": "八嶋栞", "tel": "080-9117-0329"}, {"name": "森田湊和", "tel": "090-6646-9693"}, {"name": "塩崎拓真", "tel": "090-7694-1815"}, {"name": "藤田祥真", "tel": "080-7435-9086"}, {"name": "中根徠雄", "tel": "080-2636-0815"}, {"name": "加藤陽斗", "tel": "080-3645-2929"}, {"name": "牟田翔一", "tel": "090-2979-1784"}, {"name": "安達琉空", "tel": "090-5239-4943"}, {"name": "應原颯太郎", "tel": "090-3441-3023"}, {"name": "大石隼之介", "tel": "090-3150-4617"}, {"name": "河越 泉貴", "tel": "080-2643-6863"}];
 const SENDERS = ["山田", "冨永", "鈴木", "籔中", "小澤"];
 
 
@@ -1093,6 +1102,7 @@ function makeCard(g) {
   const safeNote = (noteText || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   card.innerHTML = `
     <div class="game-head">
+      <button type="button" class="game-edit-btn" data-gid="${g.id}">✏ 編集</button>
       <div class="game-label">${g.league}　${g.match}</div>
       <div class="game-vs">${g.teamA} <span style="opacity:.5;font-size:12px">vs</span> ${g.teamB}</div>
       <div class="game-chips">
@@ -1124,6 +1134,8 @@ function makeCard(g) {
       ${noteOpen ? `<div class="note-editor"><textarea class="note-text" data-gid="${g.id}" placeholder="この試合の審判員全員の出力1に追加するメッセージを入力">${safeNote}</textarea></div>` : ''}
     </div>
   `;
+  const editBtn = card.querySelector('.game-edit-btn');
+  if(editBtn) editBtn.onclick = () => openGameEditModal(g.id);
   card.querySelectorAll('.meta-sel').forEach(sel => {
     sel.onchange = e => onMetaChange(e.currentTarget.dataset.gid, e.currentTarget.dataset.key, e.currentTarget.value);
   });
@@ -1325,7 +1337,8 @@ function openGameEditModal(gid) {
   document.getElementById('game-edit-modal').classList.add('open');
 }
 
-function closeGameEditModal() {
+function closeGameEditModal(e) {
+  if (e && e.target !== document.getElementById('game-edit-modal')) return;
   document.getElementById('game-edit-modal').classList.remove('open');
   currentEditGameId = null;
 }
