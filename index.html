@@ -414,6 +414,53 @@ body { font-family: -apple-system,'Hiragino Sans','Yu Gothic UI','Meiryo',sans-s
   </div>
 </div>
 
+<!-- 試合編集モーダル -->
+<div id="game-edit-modal" class="modal">
+  <div class="modal-content">
+    <div style="font-size:17px;font-weight:800;color:var(--navy);margin-bottom:4px">試合情報を編集</div>
+    <div class="ge-hint">変更内容は全端末に同期されます</div>
+
+    <div class="ge-sec">試合情報</div>
+    <div class="ge-grid2">
+      <div class="fg"><label class="fl">日付</label><input class="fi" type="date" id="ge-date"></div>
+      <div class="fg"><label class="fl">キックオフ</label><input class="fi" type="time" id="ge-time"></div>
+    </div>
+    <div class="fg"><label class="fl">会場</label><input class="fi" type="text" id="ge-venue"></div>
+    <div class="ge-grid2">
+      <div class="fg"><label class="fl">ホーム</label><input class="fi" type="text" id="ge-teamA"></div>
+      <div class="fg"><label class="fl">アウェイ</label><input class="fi" type="text" id="ge-teamB"></div>
+    </div>
+
+    <div class="ge-sec">審判員（空欄で帯同／不在）</div>
+    <div class="ge-ref-row">
+      <label>主審</label>
+      <input class="fi" type="text" id="ge-main-name" placeholder="氏名">
+      <input class="fi" type="tel"  id="ge-main-tel"  placeholder="電話番号">
+    </div>
+    <div class="ge-ref-row">
+      <label>AR1</label>
+      <input class="fi" type="text" id="ge-ar1-name" placeholder="氏名">
+      <input class="fi" type="tel"  id="ge-ar1-tel"  placeholder="電話番号">
+    </div>
+    <div class="ge-ref-row">
+      <label>AR2</label>
+      <input class="fi" type="text" id="ge-ar2-name" placeholder="氏名">
+      <input class="fi" type="tel"  id="ge-ar2-tel"  placeholder="電話番号">
+    </div>
+    <div class="ge-ref-row">
+      <label>アセッサー</label>
+      <input class="fi" type="text" id="ge-ass-name" placeholder="氏名（任意）">
+      <input class="fi" type="tel"  id="ge-ass-tel"  placeholder="電話番号">
+    </div>
+
+    <div class="form-err" id="ge-err"></div>
+    <div style="display:flex;gap:10px;margin-top:14px">
+      <button class="fb" style="flex:1;background:#e8ecf5;color:var(--navy)" onclick="closeGameEditModal()">キャンセル</button>
+      <button class="fb fb-navy" style="flex:2" onclick="saveGameEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1242,6 +1289,102 @@ async function toggleSt(gid, role, key) {
   const row = document.getElementById(`rr-${gid}-${role}`);
   if(g && ref && row) row.replaceWith(makeRefRow(g, ref));
   schedulePush();
+}
+
+
+/* ════════════════════════════════════
+   試合編集モーダル
+════════════════════════════════════ */
+let currentEditGameId = null;
+
+function openGameEditModal(gid) {
+  const g = games.find(x => x.id === gid);
+  if(!g) return;
+  currentEditGameId = gid;
+
+  document.getElementById('ge-date').value  = g.date || '';
+  document.getElementById('ge-time').value  = (g.time && g.time !== '未定') ? g.time : '';
+  document.getElementById('ge-venue').value = g.venue === '未定' ? '' : (g.venue || '');
+  document.getElementById('ge-teamA').value = g.teamA === '未定' ? '' : (g.teamA || '');
+  document.getElementById('ge-teamB').value = g.teamB === '未定' ? '' : (g.teamB || '');
+
+  const findRef = (role) => g.refs.find(r => r.role === role) || {name:'', tel:''};
+  const main = findRef('主審');
+  const ar1  = findRef('AR1');
+  const ar2  = findRef('AR2');
+  document.getElementById('ge-main-name').value = main.name === '未定' ? '' : main.name;
+  document.getElementById('ge-main-tel').value  = main.tel || '';
+  document.getElementById('ge-ar1-name').value  = ar1.name === '未定' ? '' : ar1.name;
+  document.getElementById('ge-ar1-tel').value   = ar1.tel || '';
+  document.getElementById('ge-ar2-name').value  = ar2.name === '未定' ? '' : ar2.name;
+  document.getElementById('ge-ar2-tel').value   = ar2.tel || '';
+  document.getElementById('ge-ass-name').value  = (g.assessor && g.assessor.name) || '';
+  document.getElementById('ge-ass-tel').value   = (g.assessor && g.assessor.tel)  || '';
+
+  document.getElementById('ge-err').textContent = '';
+  document.getElementById('game-edit-modal').classList.add('open');
+}
+
+function closeGameEditModal() {
+  document.getElementById('game-edit-modal').classList.remove('open');
+  currentEditGameId = null;
+}
+
+async function saveGameEdit() {
+  const gid = currentEditGameId;
+  const g = games.find(x => x.id === gid);
+  if(!g) { closeGameEditModal(); return; }
+
+  const date  = document.getElementById('ge-date').value;
+  const time  = document.getElementById('ge-time').value || '未定';
+  const venue = document.getElementById('ge-venue').value.trim();
+  const teamA = document.getElementById('ge-teamA').value.trim();
+  const teamB = document.getElementById('ge-teamB').value.trim();
+
+  g.date  = date;
+  g.parsed = parseDateStr(date);
+  g.time  = time;
+  g.venue = venue || '未定';
+  const venueMatch = matchVenue(g.venue);
+  g.addr   = venueMatch.addr;
+  g.addrOk = venueMatch.ok;
+  g.pref   = detectPref(g.venue);
+  g.teamA = teamA || '未定';
+  g.teamB = teamB || '未定';
+
+  const newRefs = [];
+  const mainName = document.getElementById('ge-main-name').value.trim();
+  const mainTel  = document.getElementById('ge-main-tel').value.trim();
+  newRefs.push({ role:'主審', name: mainName || '未定', tel: fmtPhone(mainTel) });
+  const ar1Name = document.getElementById('ge-ar1-name').value.trim();
+  if(ar1Name) {
+    newRefs.push({ role:'AR1', name: ar1Name, tel: fmtPhone(document.getElementById('ge-ar1-tel').value.trim()) });
+  }
+  const ar2Name = document.getElementById('ge-ar2-name').value.trim();
+  if(ar2Name) {
+    newRefs.push({ role:'AR2', name: ar2Name, tel: fmtPhone(document.getElementById('ge-ar2-tel').value.trim()) });
+  }
+  g.refs = newRefs;
+
+  const assName = document.getElementById('ge-ass-name').value.trim();
+  if(assName) {
+    g.assessor = { name: assName, tel: fmtPhone(document.getElementById('ge-ass-tel').value.trim()) };
+  } else {
+    g.assessor = null;
+  }
+
+  const sess = sessionsCache.find(s => s.id === sessionId);
+  if(sess) sess.games = games;
+  await dbSet('idx_shared', sessionsCache);
+
+  prefs = ['愛知','岐阜','三重','静岡'].filter(p => games.some(x => x.pref === p));
+  if(!prefs.includes(pref) && pref !== 'all') pref = 'all';
+
+  renderTabs();
+  renderCards();
+  schedulePush();
+  closeGameEditModal();
+  toast('試合情報を更新しました ✓');
 }
 
 /* ════════════════════════════════════  TOAST  ════════════════════════════════════ */
