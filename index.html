@@ -510,7 +510,13 @@ const VENUE_MAP = {
 };
 
 const MANAGERS = [{"name": "山田晴翔", "tel": "090-5108-4633"}, {"name": "政岡将樹", "tel": "080-6945-0941"}, {"name": "横田優希", "tel": "080-6509-1180"}, {"name": "松尾侑一", "tel": "080-3962-1337"}, {"name": "齊田勇人", "tel": "090-1092-1780"}, {"name": "野本朋希", "tel": "090-2729-7988"}, {"name": "梅原凌", "tel": "080-9739-3450"}, {"name": "林唯人", "tel": "070-4165-1644"}, {"name": "中村茉歩", "tel": "090-4405-5866"}, {"name": "小林隼大", "tel": "080-6509-1180"}, {"name": "細山周佑", "tel": "070-4422-5822"}, {"name": "金澤史奈", "tel": "090-4113-2375"}, {"name": "竹本咲", "tel": "090-9796-0352"}, {"name": "奥野遥斗", "tel": "080-3670-8686"}, {"name": "山本陽菜乃", "tel": "070-3861-1448"}, {"name": "小林隼大", "tel": "070-4212-9046"}, {"name": "小川航輝", "tel": "090-5053-2047"}, {"name": "佐原凪咲", "tel": "080-4210-1845"}, {"name": "鈴木瑛士", "tel": "080-5158-4400"}, {"name": "梅村姫果", "tel": "080-6916-8422"}, {"name": "八嶋栞", "tel": "080-9117-0329"}, {"name": "森田湊和", "tel": "090-6646-9693"}, {"name": "塩崎拓真", "tel": "090-7694-1815"}, {"name": "藤田祥真", "tel": "080-7435-9086"}, {"name": "中根徠雄", "tel": "080-2636-0815"}, {"name": "加藤陽斗", "tel": "080-3645-2929"}, {"name": "牟田翔一", "tel": "090-2979-1784"}, {"name": "安達琉空", "tel": "090-5239-4943"}, {"name": "應原颯太郎", "tel": "090-3441-3023"}, {"name": "大石隼之介", "tel": "090-3150-4617"}, {"name": "河越 泉貴", "tel": "080-2643-6863"}];
-const SENDERS = ["山田", "冨永", "鈴木", "籔中", "小澤"];
+const SENDERS = [
+  { name: "山田晴翔",   tel: "090-5108-4633" },
+  { name: "冨永華",     tel: "080-2668-8880" },
+  { name: "鈴木未友貴", tel: "070-8909-6239" },
+  { name: "籔中宗一郎", tel: "090-4850-9732" },
+  { name: "小澤拓夢",   tel: "080-5761-8994" }
+];
 
 
 /* ════════════════════════════════════  IDB  ════════════════════════════════════ */
@@ -1124,7 +1130,7 @@ function makeCard(g) {
         <label>📤 送信元</label>
         <select class="meta-sel" data-gid="${g.id}" data-key="sender">
           <option value="">未設定</option>
-          ${SENDERS.map(s=>`<option value="${s}"${s===sender?' selected':''}>${s}</option>`).join('')}
+          ${SENDERS.map(s=>`<option value="${s.name}"${s.name===sender?' selected':''}>${s.name}</option>`).join('')}
         </select>
       </div>
       <div class="meta-actions">
@@ -1224,12 +1230,12 @@ function makeRefRow(g, ref) {
 ════════════════════════════════════ */
 function buildOut1(g, ref) {
   const {month,day,dow} = g.parsed;
-  const lastName  = ref ? ref.name.split(/[\s　]/)[0] : '';
-  const salute    = lastName ? `${lastName} 様` : '';
+  const fullName  = ref ? ref.name.replace(/[\s　]/g,'') : '';
+  const salute    = fullName ? `${fullName} 様` : '';
   const tour      = (sessionsCache.find(s => s.id === sessionId) || {}).tournament || '東海学生リーグ';
-  const greeting  = `お世話になっております。\n\n今週末の${tour}の割り当ての確認の連絡になります。`;
+  const greeting  = `お世話になっております。\nこの度は${tour}の割当を受諾して頂き誠にありがとうございます。\n今週末に行われる試合の確認の連絡になります。`;
   const gameBlock = [`${month}/${day}（${dow}）`, g.venue, `住所：${g.addr}`, `${g.time}ko`, `${g.teamA} 対 ${g.teamB}`].join('\n');
-  const refBlock  = g.refs.map(r=>`${r.role}：${r.name} 様`).join('\n') + (g.assessor ? `\nアセッサー：${g.assessor.name} 様` : '');
+  const refBlock  = g.refs.map(r=>`${r.role}：${r.name} 様`).join('\n');
   const sKey      = `${sessionId}__${g.id}`;
   const mgrIdx    = (selections.managers || {})[sKey];
   const mgrObj    = (mgrIdx != null && MANAGERS[mgrIdx]) ? MANAGERS[mgrIdx] : null;
@@ -1238,12 +1244,19 @@ function buildOut1(g, ref) {
   const VEHICLE_TEXT = "又、当日の駐車場登録をさせて頂きたいため、車情報を教えて頂きたいです。以下をコピーしてそのまま送信お願いいたします。\n━━━━━━━━━━\n名前：\n電話番号：\n車種：\n車の色：\n一連指定番号(4桁)：\n分類番号(3桁)：\n平仮名：\n地域：\n━━━━━━━━━━";
   const extraNote = ((selections.notes || {})[sKey] || '').trim();
   const closing   = 'お忙しい中お手数おかけいたしますが、ご確認の返信を宜しくお願い致します。';
-  const sender    = (selections.senders || {})[sKey] || '';
+  // 送信元署名（選択された1名のフル署名）
+  const senderVal = (selections.senders || {})[sKey] || '';
+  let senderSign = '';
+  if(senderVal) {
+    const sObj = SENDERS.find(s => s.name === senderVal)
+              || SENDERS.find(s => senderVal.startsWith(s.name) || s.name.startsWith(senderVal));
+    if(sObj) senderSign = `東海学連サッカー連盟審判部　${sObj.name}\n電話番号　${sObj.tel}`;
+  }
   const parts = salute ? [salute, greeting, gameBlock, refBlock, mgr] : [greeting, gameBlock, refBlock, mgr];
   if(vehicle)   parts.push(VEHICLE_TEXT);
   if(extraNote) parts.push(extraNote);
   parts.push(closing);
-  if(sender)    parts.push(sender);
+  if(senderSign) parts.push(senderSign);
   return parts.join('\n\n');
 }
 function buildOut2(g) {
