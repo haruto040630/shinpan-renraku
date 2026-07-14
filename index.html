@@ -258,6 +258,9 @@ body { font-family: -apple-system,'Hiragino Sans','Yu Gothic UI','Meiryo',sans-s
 /* Toast */
 .toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(16px); background: var(--navy); color: var(--white); padding: 10px 22px; border-radius: 30px; font-size: 13px; font-weight: 600; opacity: 0; transition: opacity .22s, transform .22s; pointer-events: none; z-index: 9999; white-space: nowrap; max-width: 88vw; text-align: center; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+/* バージョン表示 */
+.app-version { text-align: center; font-size: 11px; color: var(--muted); margin-top: 18px; letter-spacing: .5px; }
+.app-bar-sub .ver-tag { opacity: .7; }
 </style>
 </head>
 <body>
@@ -282,6 +285,7 @@ body { font-family: -apple-system,'Hiragino Sans','Yu Gothic UI','Meiryo',sans-s
       <div class="form-err" id="login-err"></div>
       <button class="fb fb-navy" onclick="doLogin()" id="login-btn">ログイン</button>
     </div>
+    <div class="app-version" id="app-version"></div>
   </div>
 </div>
 
@@ -482,6 +486,11 @@ body { font-family: -apple-system,'Hiragino Sans','Yu Gothic UI','Meiryo',sans-s
 
 <script>
 /* ════════════════════════════════════
+   バージョン（デプロイ毎に更新）
+════════════════════════════════════ */
+const APP_VERSION = 'v17 (2026-05-27)';
+
+/* ════════════════════════════════════
    VENUE MAP（会場住所.xlsx 埋め込み）
 ════════════════════════════════════ */
 const VENUE_MAP = {
@@ -600,6 +609,8 @@ function initFormSelects(prefix, meta) {
 /* ════════════════════════════════════  BOOT  ════════════════════════════════════ */
 window.addEventListener('load', async () => {
   document.getElementById('login-pw').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+  const vEl = document.getElementById('app-version');
+  if(vEl) vEl.textContent = 'バージョン ' + APP_VERSION;
 });
 
 /* ════════════════════════════════════  PAGE NAV  ════════════════════════════════════ */
@@ -735,7 +746,7 @@ function togglePw() {
 
 /* ════════════════════════════════════  DASHBOARD  ════════════════════════════════════ */
 async function showDash() {
-  document.getElementById('dash-sub').textContent = '';
+  document.getElementById('dash-sub').textContent = APP_VERSION;
   await renderSessions();
   showPage('pg-dash');
 }
@@ -1721,22 +1732,39 @@ document.addEventListener('visibilitychange', () => {
 
   if ('serviceWorker' in navigator) {
     const swSrc = `
-      const CACHE = 'shinpan-v1';
+      const CACHE = 'shinpan-' + ${JSON.stringify(APP_VERSION)};
       const URL_SELF = ${JSON.stringify(baseUrl)};
       self.addEventListener('install', e => {
         self.skipWaiting();
         e.waitUntil(caches.open(CACHE).then(c => c.add(URL_SELF)).catch(()=>{}));
       });
-      self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
+      self.addEventListener('activate', e => e.waitUntil(
+        caches.keys()
+          .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+          .then(() => self.clients.claim())
+      ));
       self.addEventListener('fetch', e => {
         if (e.request.method !== 'GET') return;
+        let url;
+        try { url = new URL(e.request.url); } catch(_) { return; }
+        // 外部API（GitHub等）はSW介入なし → 同期の鮮度を保つ
+        if (url.origin !== self.location.origin) return;
+        const isDoc = e.request.mode === 'navigate' || e.request.destination === 'document';
+        if (isDoc) {
+          // アプリ本体はネットワーク優先（新バージョンを即反映）
+          e.respondWith(
+            fetch(e.request).then(res => {
+              if (res && res.ok) { const clone = res.clone(); caches.open(CACHE).then(c => c.put(e.request, clone)).catch(()=>{}); }
+              return res;
+            }).catch(() => caches.match(e.request))
+          );
+          return;
+        }
+        // その他はキャッシュ優先（オフライン対応）
         e.respondWith(
           caches.match(e.request).then(cached => {
             const net = fetch(e.request).then(res => {
-              if (res && res.ok) {
-                const clone = res.clone();
-                caches.open(CACHE).then(c => c.put(e.request, clone)).catch(()=>{});
-              }
+              if (res && res.ok) { const clone = res.clone(); caches.open(CACHE).then(c => c.put(e.request, clone)).catch(()=>{}); }
               return res;
             }).catch(() => cached);
             return cached || net;
