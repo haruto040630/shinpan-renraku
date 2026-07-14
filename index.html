@@ -159,8 +159,8 @@ body { font-family: -apple-system,'Hiragino Sans','Yu Gothic UI','Meiryo',sans-s
 .ge-ref-row { display: grid; grid-template-columns: 72px 1fr 1fr; gap: 8px; align-items: center; margin-bottom: 8px; }
 .ge-ref-row label { font-size: 12px; font-weight: 700; color: var(--text); }
 .ge-ref-row .fi { padding: 9px 10px; font-size: 13px; }
-.game-label { font-size: 11px; font-weight: 600; opacity: .65; letter-spacing: .3px; }
-.game-vs { font-size: 17px; font-weight: 800; margin: 3px 0 5px; line-height: 1.25; }
+.game-label { font-size: 11px; font-weight: 600; opacity: .65; letter-spacing: .3px; padding-right: 84px; }
+.game-vs { font-size: 17px; font-weight: 800; margin: 3px 0 5px; line-height: 1.25; padding-right: 84px; }
 .game-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 5px; }
 .game-chip { background: rgba(255,255,255,.15); border-radius: 20px; padding: 2px 9px; font-size: 11px; font-weight: 600; }
 .game-venue { font-size: 12px; opacity: .8; }
@@ -826,6 +826,8 @@ async function openSession(sid, meta) {
   if(!gs) gs = await dbGet(`games_${sid}`);
   if(!gs) { alert('試合データが見つかりません'); return; }
   games = gs;
+  // 既存セッションの pref を最新ロジックで再判定（住所ベース、岐阜バグ対策）
+  games.forEach(g => { g.pref = detectPref(g.venue, g.addr); });
   prefs = ['愛知','岐阜','三重','静岡'].filter(p=>games.some(g=>g.pref===p));
   pref = 'all';
   renderTabs();
@@ -951,10 +953,19 @@ function matchVenue(q) {
 }
 
 /* ════════════════════════════════════  HELPERS  ════════════════════════════════════ */
-function detectPref(v) {
-  if(/岐阜/.test(v)) return '岐阜';
-  if(/四日市|三重|鈴鹿|津市|桑名/.test(v)) return '三重';
-  if(/竜洋|磐田|浜松|静岡|草薙|とこは|常葉|ゆめりあ|袋井|小笠山/.test(v)) return '静岡';
+function detectPref(v, addr) {
+  // ① 住所が取得できていれば都道府県プレフィックスで確実に判定
+  if(addr && addr !== '未定') {
+    if(addr.startsWith('岐阜県')) return '岐阜';
+    if(addr.startsWith('三重県')) return '三重';
+    if(addr.startsWith('静岡県')) return '静岡';
+    if(addr.startsWith('愛知県')) return '愛知';
+  }
+  // ② 住所未定時は会場名キーワードで推定
+  const s = v || '';
+  if(/岐阜|イシダテクノ|新日本ガス/.test(s)) return '岐阜';
+  if(/四日市|三重|鈴鹿|津市|桑名|NTN/.test(s)) return '三重';
+  if(/竜洋|磐田|浜松|静岡|草薙|とこは|常葉|ゆめりあ|袋井|小笠山/.test(s)) return '静岡';
   return '愛知';
 }
 function fmtTime(v) {
@@ -1030,7 +1041,7 @@ function buildGames(rows) {
     if (cols.assessor >= 0 && isPresent(cell('assessor'))) {
       assessor = { name: String(cell('assessor')).trim(), tel: fmtPhone(cellPr('assessor')) };
     }
-    games.push({ id, league, match: matchName, date, parsed, time, venue, addr, addrOk, teamA, teamB, pref: detectPref(venue), refs, assessor });
+    games.push({ id, league, match: matchName, date, parsed, time, venue, addr, addrOk, teamA, teamB, pref: detectPref(venue, addr), refs, assessor });
     i += 2;
   }
   prefs = ['愛知','岐阜','三重','静岡'].filter(p => games.some(g => g.pref === p));
@@ -1103,7 +1114,8 @@ function makeCard(g) {
   card.id = 'gc-'+g.id;
   const sKey   = `${sessionId}__${g.id}`;
   const mgrIdx = (selections.managers || {})[sKey];
-  const sender = (selections.senders  || {})[sKey] || '';
+  let sender = (selections.senders  || {})[sKey] || '';
+  if(sender) { const _sm = SENDERS.find(s => s.name === sender) || SENDERS.find(s => s.name.startsWith(sender) || sender.startsWith(s.name)); if(_sm) sender = _sm.name; }
   const vehicle = !!(selections.vehicle || {})[sKey];
   const noteText = (selections.notes || {})[sKey];
   const noteOpen = noteText != null; // null/undefined なら非表示
@@ -1415,7 +1427,7 @@ async function saveGameEdit() {
   const venueMatch = matchVenue(g.venue);
   g.addr   = venueMatch.addr;
   g.addrOk = venueMatch.ok;
-  g.pref   = detectPref(g.venue);
+  g.pref   = detectPref(g.venue, g.addr);
   g.teamA = teamA || '未定';
   g.teamB = teamB || '未定';
 
@@ -1606,11 +1618,20 @@ async function syncOnce() {
       if(document.getElementById('pg-dash').classList.contains('active')) {
         renderSessions();
       } else if(document.getElementById('pg-session').classList.contains('active') && sessionId) {
-        const sess = sessionsCache.find(s => s.id === sessionId);
-        if(sess && sess.games) {
-          games = sess.games;
-          states = window._allStates || {};
-          renderCards();
+        // 編集モーダルを開いている最中は再描画しない（入力保護）
+        const editing = document.getElementById('game-edit-modal').classList.contains('open')
+                     || document.getElementById('edit-modal').classList.contains('open');
+        if(!editing) {
+          const sess = sessionsCache.find(s => s.id === sessionId);
+          if(sess && sess.games) {
+            games = sess.games;
+            games.forEach(g => { g.pref = detectPref(g.venue, g.addr); });
+            states = window._allStates || {};
+            prefs = ['愛知','岐阜','三重','静岡'].filter(p=>games.some(g=>g.pref===p));
+            if(pref !== 'all' && !prefs.includes(pref)) pref = 'all';
+            renderTabs();
+            renderCards();
+          }
         }
       }
     }
