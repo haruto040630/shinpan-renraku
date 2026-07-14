@@ -1178,13 +1178,8 @@ function makeCard(g) {
   const footer = document.createElement('div');
   footer.className = 'game-footer';
   let footerHtml = '<button class="out3-btn">📞&ensp;出力3（電話番号リスト）コピー</button>';
-  const mgrSelIdx = (selections.managers || {})[`${sessionId}__${g.id}`];
-  if(mgrSelIdx != null && MANAGERS[mgrSelIdx]) {
-    footerHtml += `<button class="mgrconf-btn">📢&ensp;会場責任者 確定連絡（${MANAGERS[mgrSelIdx].name}）</button>`;
-  }
-  if(g.assessor && g.assessor.name && g.assessor.name !== '未定') {
-    footerHtml += `<button class="assessor-btn">🅿&ensp;アセッサー駐車場申請（${g.assessor.name}）</button>`;
-  }
+  footerHtml += `<button class="mgrconf-btn">📢&ensp;会場責任者 確定連絡</button>`;
+  footerHtml += `<button class="assessor-btn">🅿&ensp;アセッサー駐車場申請</button>`;
   footer.innerHTML = footerHtml;
   footer.querySelector('.out3-btn').onclick = () => copyOut3(g.id);
   const mb = footer.querySelector('.mgrconf-btn');
@@ -1201,7 +1196,6 @@ function onMetaChange(gid, key, val) {
     selections.managers = selections.managers || {};
     if(val === '') delete selections.managers[sKey];
     else selections.managers[sKey] = +val;
-    rerender = true; // 確定連絡ボタンの表示切替
   } else if(key === 'sender') {
     selections.senders = selections.senders || {};
     if(val === '') delete selections.senders[sKey];
@@ -1326,7 +1320,6 @@ function copyOut3(gid) {
 }
 /* ── アセッサー駐車場申請メッセージ ── */
 function buildAssessorParking(g) {
-  if(!g.assessor || !g.assessor.name || g.assessor.name === '未定') return '';
   const {month,day} = g.parsed;
   const sKey = `${sessionId}__${g.id}`;
   const tour = (sessionsCache.find(s => s.id === sessionId) || {}).tournament || '東海学生リーグ';
@@ -1338,7 +1331,8 @@ function buildAssessorParking(g) {
         || SENDERS.find(s => senderVal.startsWith(s.name) || s.name.startsWith(senderVal));
   }
   if(!sObj) sObj = SENDERS.find(s => s.name === '籔中宗一郎') || SENDERS[3];
-  const assessorName = g.assessor.name.replace(/[\s　]/g,'');
+  const assessorName = (g.assessor && g.assessor.name && g.assessor.name !== '未定')
+    ? g.assessor.name.replace(/[\s　]/g,'') : '未定';
   const carBlock = '名前：\n電話番号：\n車種：\n車の色：\n一連指定番号(4桁)：\n分類番号(3桁)：\n平仮名：\n地域：';
   const parts = [
     `${assessorName} 様`,
@@ -1352,17 +1346,17 @@ function buildAssessorParking(g) {
 }
 function copyAssessorParking(gid) {
   const g=games.find(x=>x.id===gid);
-  if(!g || !g.assessor) return;
-  const text = buildAssessorParking(g);
-  if(!text) { toast('アセッサーが登録されていません'); return; }
-  clip(text, `アセッサー（${g.assessor.name}）の駐車場申請文をコピーしました ✓`);
+  if(!g) return;
+  const aName = (g.assessor && g.assessor.name && g.assessor.name !== '未定') ? g.assessor.name : '未定';
+  clip(buildAssessorParking(g), `アセッサー（${aName}）の駐車場申請文をコピーしました ✓`);
 }
 /* ── 会場責任者 確定連絡（未定で送信後に確定した場合の追記） ── */
 function buildManagerConfirm(g) {
   const sKey = `${sessionId}__${g.id}`;
   const mgrIdx = (selections.managers || {})[sKey];
   const mgrObj = (mgrIdx != null && MANAGERS[mgrIdx]) ? MANAGERS[mgrIdx] : null;
-  if(!mgrObj) return '';
+  const mgrName = mgrObj ? mgrObj.name : '未定';
+  const mgrTel  = mgrObj ? mgrObj.tel  : '未定';
   // 署名（送信元、未選択なら籔中宗一郎）
   const senderVal = (selections.senders || {})[sKey] || '';
   let sObj = null;
@@ -1374,7 +1368,7 @@ function buildManagerConfirm(g) {
   const parts = [
     'お世話になっております。',
     'ご連絡した試合につきまして、会場責任者が決まりましたので、ご連絡させて頂きます。',
-    `会場責任者: ${mgrObj.name}\n電話番号 ${mgrObj.tel}`,
+    `会場責任者: ${mgrName}\n電話番号 ${mgrTel}`,
     '当日、何かございましたら上記連絡先までお願いいたします。\nお忙しい中お手数おかけいたしますが、よろしくお願い致します。',
     `東海学連サッカー連盟審判部　${sObj.name}\n電話番号　${sObj.tel}`
   ];
@@ -1383,10 +1377,9 @@ function buildManagerConfirm(g) {
 function copyManagerConfirm(gid) {
   const g=games.find(x=>x.id===gid);
   if(!g) return;
-  const text = buildManagerConfirm(g);
-  if(!text) { toast('会場責任者が未選択です'); return; }
   const mgrIdx = (selections.managers || {})[`${sessionId}__${g.id}`];
-  clip(text, `会場責任者確定連絡（${MANAGERS[mgrIdx].name}）をコピーしました ✓`);
+  const mgrName = (mgrIdx != null && MANAGERS[mgrIdx]) ? MANAGERS[mgrIdx].name : '未定';
+  clip(buildManagerConfirm(g), `会場責任者確定連絡（${mgrName}）をコピーしました ✓`);
 }
 function clip(text, msg) {
   navigator.clipboard.writeText(text).catch(() => {
