@@ -150,6 +150,10 @@ body { font-family: -apple-system,'Hiragino Sans','Yu Gothic UI','Meiryo',sans-s
 
 /* Game card */
 .game-card { background: var(--white); border-radius: 14px; overflow: hidden; margin-bottom: 14px; box-shadow: 0 1px 8px rgba(13,27,62,.1); }
+/* 南山・名城会場 強調カード */
+.game-card.venue-highlight { box-shadow: 0 0 0 3px #f0a500, 0 4px 18px rgba(240,165,0,.45); }
+.game-card.venue-highlight .game-head { background: linear-gradient(135deg, #8a5a00 0%, #b8860b 100%); }
+.game-card.venue-highlight::before { content: '★ 注目会場（南山・名城）'; display: block; background: #f0a500; color: #3a2800; font-size: 11px; font-weight: 800; letter-spacing: 1px; text-align: center; padding: 5px; }
 .game-head { background: linear-gradient(135deg, var(--navy) 0%, var(--navy3) 100%); color: var(--white); padding: 12px 14px 10px; position: relative; }
 .game-edit-btn { position: absolute; top: 8px; right: 8px; background: rgba(255,255,255,.16); color: #fff; border: 1px solid rgba(255,255,255,.32); border-radius: 7px; padding: 7px 11px; font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit; -webkit-tap-highlight-color: rgba(255,255,255,.2); touch-action: manipulation; min-height: 34px; z-index: 2; }
 .game-edit-btn:active { background: rgba(255,255,255,.3); transform: scale(.96); }
@@ -1113,6 +1117,8 @@ function renderCards() {
 function makeCard(g) {
   const card = document.createElement('div');
   card.className = 'game-card';
+  // 南山・名城会場は強調表示
+  if(/南山|名城/.test(g.venue || '')) card.classList.add('venue-highlight');
   card.id = 'gc-'+g.id;
   const sKey   = `${sessionId}__${g.id}`;
   const mgrIdx = (selections.managers || {})[sKey];
